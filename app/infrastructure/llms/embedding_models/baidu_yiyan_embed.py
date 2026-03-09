@@ -3,7 +3,6 @@ from typing import List, Tuple
 import numpy as np
 import asyncio
 import logging
-import qianfan
 from app.infrastructure.llms.embedding_models.base import BaseEmbedding, MAX_RETRY_ATTEMPTS
 
 
@@ -21,6 +20,9 @@ class BaiduYiyanEmbed(BaseEmbedding):
             **kwargs: 其他参数
         """
         super().__init__(api_key, model_name, base_url, **kwargs)
+
+        # 延迟导入 qianfan，避免模块加载时的依赖问题
+        import qianfan
 
         # 解析API密钥
         try:

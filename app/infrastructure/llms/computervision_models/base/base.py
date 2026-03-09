@@ -8,9 +8,11 @@ from typing import List, Dict, Any, Optional, Tuple, Union
 from urllib.parse import urljoin
 from PIL import Image
 import logging
+from pathlib import Path
 from app.config.settings import Settings
 from app.utils.common import is_english
-from app.agent_frame.prompts import get_prompt_template
+from app.infrastructure.llms.prompts.prompt_template_load import get_prompt_template
+
 
 # 重试配置常量
 MAX_RETRY_ATTEMPTS = 3  # 最大尝试次数
@@ -166,7 +168,11 @@ class BaseComputerVision(ABC):
                     },
                     {
                         "type": "text",
-                        "text": prompt if prompt else get_prompt_template("cv/computer_vision_describe_prompt.md", {"page": None}),
+                        "text": prompt if prompt else get_prompt_template(
+                            str(Path(__file__).parent.parent / "prompts" / "cv"),
+                            "computer_vision_describe_prompt.md",
+                            {"page": None}
+                        ),
                     },
                 ],
             }

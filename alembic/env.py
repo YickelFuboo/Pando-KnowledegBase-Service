@@ -12,32 +12,40 @@ from alembic import context
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-# 手动加载 env 文件，确保使用正确的编码
-env_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "env")
-if os.path.exists(env_file_path):
-    try:
-        with open(env_file_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    key = key.strip()
-                    value = value.strip()
-                    if key and value and key not in os.environ:
-                        os.environ[key] = value
-    except UnicodeDecodeError:
+# 仅从项目根目录的 env 文件加载配置（绝对路径，与启动位置无关）
+_project_root = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+_env_path = os.path.join(_project_root, "env")
+
+_env_vars = {}
+if os.path.exists(_env_path):
+    for enc in ("utf-8", "gbk"):
         try:
-            with open(env_file_path, 'r', encoding='gbk') as f:
+            with open(_env_path, "r", encoding=enc) as f:
                 for line in f:
                     line = line.strip()
-                    if line and not line.startswith('#') and '=' in line:
-                        key, value = line.split('=', 1)
-                        key = key.strip()
-                        value = value.strip()
-                        if key and value and key not in os.environ:
-                            os.environ[key] = value
-        except Exception:
-            pass
+                    if line and not line.startswith("#") and "=" in line:
+                        key, value = line.split("=", 1)
+                        key, value = key.strip(), value.strip()
+                        if key:
+                            _env_vars[key] = value
+            break
+        except (UnicodeDecodeError, Exception):
+            continue
+for k, v in _env_vars.items():
+    if v is not None:
+        os.environ[k] = v
+
+# 布尔型环境变量：若被系统设为 "10"/"1"/"0"，规范为 pydantic 可解析的 true/false，避免 ValidationError
+_bool_keys = (
+    "DEBUG", "MINIO_SECURE", "S3_USE_SSL", "REDIS_SSL", "REDIS_DECODE_RESPONSES",
+    "REDIS_RETRY_ON_TIMEOUT", "LANGFUSE_ENABLED", "AGENT_SESSION_USE_LOCAL_STORAGE",
+)
+for _k in _bool_keys:
+    _val = os.environ.get(_k, "")
+    if _val in ("10", "1"):
+        os.environ[_k] = "true"
+    elif _val == "0":
+        os.environ[_k] = "false"
 
 # 导入模型和配置（Base 统一使用 infrastructure/database；SessionRecord 单独导入避免循环依赖）
 from app.infrastructure.database.models_base import Base
@@ -49,25 +57,31 @@ from app.config.settings import settings
 # access to the values within the .ini file in use.
 config = context.config
 
-# 设置数据库URL（使用 SQLAlchemy URL 对象避免编码问题）
+def _get_env(key: str, default: str = "") -> str:
+    # 以 env 文件为准；需临时覆盖时可在终端设置： $env:POSTGRESQL_PASSWORD="xxx"
+    return _env_vars.get(key) or os.environ.get(key, default) or default
+
+# 设置数据库URL（来自项目根目录 env 文件）
 try:
-    if settings.database_type.lower() == "postgresql":
+    database_type = (_get_env("DATABASE_TYPE") or "postgresql").strip().lower()
+    db_name = _get_env("DB_NAME", "pando_knowledgevector_service")
+    if database_type == "postgresql":
         sync_url = URL.create(
-            drivername="postgresql",
-            username=str(settings.postgresql_user),
-            password=str(settings.postgresql_password),
-            host=str(settings.postgresql_host),
-            port=int(settings.postgresql_port),
-            database=str(settings.db_name)
+            drivername="postgresql+psycopg",
+            username=_get_env("POSTGRESQL_USER", "postgres"),
+            password=_get_env("POSTGRESQL_PASSWORD", ""),
+            host=_get_env("POSTGRESQL_HOST", "localhost"),
+            port=int(_get_env("POSTGRESQL_PORT", "5432")),
+            database=db_name,
         )
-    elif settings.database_type.lower() == "mysql":
+    elif database_type == "mysql":
         sync_url = URL.create(
             drivername="mysql",
-            username=str(settings.mysql_user),
-            password=str(settings.mysql_password),
-            host=str(settings.mysql_host),
-            port=int(settings.mysql_port),
-            database=str(settings.db_name)
+            username=_get_env("MYSQL_USER", "root"),
+            password=_get_env("MYSQL_PASSWORD", ""),
+            host=_get_env("MYSQL_HOST", "localhost"),
+            port=int(_get_env("MYSQL_PORT", "3306")),
+            database=db_name,
         )
     else:
         sync_url = "sqlite:///./koalawiki.db"
@@ -123,36 +137,26 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    if settings.database_type.lower() == "postgresql":
-        # 对于 PostgreSQL，使用 creator 函数直接创建连接，避免 URL 编码问题
-        user = os.getenv("POSTGRESQL_USER", str(settings.postgresql_user))
-        password = os.getenv("POSTGRESQL_PASSWORD", str(settings.postgresql_password))
-        host = os.getenv("POSTGRESQL_HOST", str(settings.postgresql_host))
-        port = int(os.getenv("POSTGRESQL_PORT", str(settings.postgresql_port)))
-        db_name = os.getenv("DB_NAME", str(settings.db_name))
-        
-        import psycopg2
-
-        def connect():
-            # Windows 下 psycopg2 可能与 libpq 通信时出现 UTF-8 解码错误，若此处报错可改用离线 SQL 方式迁移
-            connect_host = "127.0.0.1" if str(host).lower() in ["localhost", "127.0.0.1"] else str(host)
-            dsn_dict = {
-                "host": connect_host,
-                "port": port,
-                "database": str(db_name),
-                "user": str(user),
-                "password": str(password),
-                "client_encoding": "UTF8",
-            }
-            return psycopg2.connect(**dsn_dict)
-        
+    database_type = (_get_env("DATABASE_TYPE") or "postgresql").strip().lower()
+    if database_type == "postgresql":
+        import psycopg
+        host = _env_vars.get("POSTGRESQL_HOST", "localhost")
+        if str(host).lower() in ("localhost", "127.0.0.1"):
+            host = "127.0.0.1"
+        def _pg_creator():
+            return psycopg.connect(
+                host=host,
+                port=int(_env_vars.get("POSTGRESQL_PORT", "5432")),
+                dbname=_env_vars.get("DB_NAME", "pando_knowledgevector_service"),
+                user=_env_vars.get("POSTGRESQL_USER", "postgres"),
+                password=_env_vars.get("POSTGRESQL_PASSWORD", ""),
+            )
         connectable = create_engine(
-            "postgresql://",
+            "postgresql+psycopg://",
+            creator=_pg_creator,
             poolclass=pool.NullPool,
-            creator=connect
         )
     else:
-        # 对于其他数据库类型，使用已经构建好的 URL
         url_str = config.get_main_option("sqlalchemy.url")
         connectable = create_engine(url_str, poolclass=pool.NullPool)
 

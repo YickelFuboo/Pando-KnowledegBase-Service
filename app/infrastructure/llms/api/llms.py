@@ -100,7 +100,6 @@ async def get_all_models():
         raise HTTPException(status_code=500, detail=f"获取模型列表失败: {str(e)}")
 
 
-
 @router.get("/available/chat", summary="获取可用聊天模型列表")
 async def get_chat_models():
     """获取可用聊天模型列表"""

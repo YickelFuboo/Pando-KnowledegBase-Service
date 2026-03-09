@@ -21,18 +21,6 @@ def get_project_meta(package_name: str = "knowledge-service"):
         "description": poetry.get("description", ""),
     }
 
-def get_project_base_directory():
-    # 通过查找包含pyproject.toml的目录来确定项目根目录
-    current_dir = os.path.dirname(__file__)
-
-    project_root = current_dir
-    while project_root != os.path.dirname(project_root):  # 直到到达文件系统根目录
-        if os.path.exists(os.path.join(project_root, "pyproject.toml")):
-            break
-        project_root = os.path.dirname(project_root)
-
-    return project_root
-
 def is_chinese(text: str) -> bool:
     """判断文本是否包含中文字符"""
     for char in text:

@@ -15,7 +15,7 @@ from app.infrastructure.database import close_db, health_check_db
 from app.infrastructure.storage import STORAGE_CONN
 from app.infrastructure.vector_store import VECTOR_STORE_CONN
 from app.infrastructure.redis import REDIS_CONN
-from app.utils.auth.jwt_middleware import jwt_middleware
+from app.utils.auth.jwt_middleware import create_jwt_middleware
 from app.domains.api import kb, document, kb_qa, llm_chat
 from app.infrastructure.llms.api import llms
 from app.agent_frame.session.api import router as sessions
@@ -67,7 +67,7 @@ app.add_middleware(
 app.add_middleware(logging_middleware)
 
 # 添加JWT中间件到应用
-#app.middleware("http")(jwt_middleware)
+#app.middleware("http")(create_jwt_middleware)
 
 def run_celery_worker():
     """在独立线程中运行 Celery Worker"""

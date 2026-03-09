@@ -1,13 +1,13 @@
 import logging
+from typing import Any, Callable, List, Optional
 from fastapi import Request, HTTPException, status
 from fastapi.responses import JSONResponse
-from typing import Optional, Callable, List
-from app.utils.auth.jwt_local_validator import JWTLocalValidator
-from app.config.settings import settings
+from .jwt_validator import JWTValidator
+
 
 class JWTAuthMiddleware:
-    """JWT认证中间件 - 供业务微服务使用"""
-    
+    """JWT认证中间件 - 供业务微服务使用，从 settings 读取配置。"""
+
     def __init__(
         self,
         exclude_paths: Optional[List[str]] = None,
@@ -18,14 +18,15 @@ class JWTAuthMiddleware:
     ):
         """
         初始化JWT认证中间件
-        
+
         Args:
             exclude_paths: 排除的路径列表，如 ["/health", "/docs"]
             exclude_methods: 排除的HTTP方法列表，如 ["GET", "OPTIONS"]
             cache_ttl: 缓存时间（秒）
+            blacklist_cache_ttl: 黑名单缓存时间（秒）
             on_auth_failed: 认证失败时的回调函数
         """
-        self.validator = JWTLocalValidator(cache_ttl, blacklist_cache_ttl)
+        self.validator = JWTValidator(cache_ttl=cache_ttl, blacklist_cache_ttl=blacklist_cache_ttl)
         self.exclude_paths = exclude_paths or []
         self.exclude_methods = exclude_methods or ["OPTIONS"]
         self.on_auth_failed = on_auth_failed
@@ -44,13 +45,9 @@ class JWTAuthMiddleware:
         # 检查Bearer格式
         if not auth_header.startswith("Bearer "):
             return self._handle_auth_failed("Authorization格式错误", status.HTTP_401_UNAUTHORIZED)
-        
-        # 提取令牌
-        token = auth_header[7:]  # 去掉"Bearer "前缀
-        
-        # 验证令牌
-        result = self.validator.verify_token(token)
-        
+
+        token = auth_header[7:]
+        result = await self.validator.verify_token_async(token)
         if not result.get("success") or not result.get("data", {}).get("valid"):
             return self._handle_auth_failed(
                 result.get("message", "令牌验证失败"),
@@ -96,21 +93,24 @@ class JWTAuthMiddleware:
         )
 
 class JWTAuthDependency:
-    """JWT认证依赖 - 供FastAPI路由使用"""
-    
-    def __init__(self, cache_ttl: int = 3600, blacklist_cache_ttl: int = 300):
+    """JWT认证依赖 - 供FastAPI路由使用，从 settings 读取配置。"""
+
+    def __init__(
+        self,
+        cache_ttl: int = 3600,
+        blacklist_cache_ttl: int = 300
+    ):
         """
         初始化JWT认证依赖
-        
+
         Args:
             cache_ttl: 缓存时间（秒）
             blacklist_cache_ttl: 黑名单缓存时间（秒）
         """
-        self.validator = JWTLocalValidator(cache_ttl, blacklist_cache_ttl)
-    
-    def __call__(self, request: Request):
+        self.validator = JWTValidator(cache_ttl=cache_ttl, blacklist_cache_ttl=blacklist_cache_ttl)
+
+    async def __call__(self, request: Request):
         """依赖函数"""
-        # 获取Authorization头
         auth_header = request.headers.get("Authorization")
         if not auth_header:
             raise HTTPException(
@@ -118,8 +118,6 @@ class JWTAuthDependency:
                 detail="缺少Authorization头",
                 headers={"WWW-Authenticate": "Bearer"}
             )
-        
-        # 检查Bearer格式
         if not auth_header.startswith("Bearer "):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -127,45 +125,27 @@ class JWTAuthDependency:
                 headers={"WWW-Authenticate": "Bearer"}
             )
         
-        # 提取令牌
-        token = auth_header[7:]  # 去掉"Bearer "前缀
-        
-        # 验证令牌
-        result = self.validator.verify_token(token)
-        
+        token = auth_header[7:]
+        result = await self.validator.verify_token_async(token)
         if not result.get("success") or not result.get("data", {}).get("valid"):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=result.get("message", "令牌验证失败"),
                 headers={"WWW-Authenticate": "Bearer"}
             )
-        
-        # 返回用户信息
         return result.get("data", {})
     
     def close(self):
         """关闭验证器"""
         self.validator.close()
 
-# 便捷函数
 def create_jwt_middleware(
     exclude_paths: Optional[List[str]] = None,
     exclude_methods: Optional[List[str]] = None,
     cache_ttl: int = 3600,
     blacklist_cache_ttl: int = 300
 ) -> JWTAuthMiddleware:
-    """
-    创建JWT认证中间件
-    
-    Args:
-        exclude_paths: 排除的路径列表
-        exclude_methods: 排除的HTTP方法列表
-        cache_ttl: 缓存时间（秒）
-        blacklist_cache_ttl: 黑名单缓存时间（秒）
-        
-    Returns:
-        JWTAuthMiddleware: JWT认证中间件实例
-    """
+    """创建JWT认证中间件，需传入 settings。"""
     return JWTAuthMiddleware(
         exclude_paths=exclude_paths,
         exclude_methods=exclude_methods,
@@ -173,26 +153,9 @@ def create_jwt_middleware(
         blacklist_cache_ttl=blacklist_cache_ttl
     )
 
-def create_jwt_dependency(cache_ttl: int = 3600, blacklist_cache_ttl: int = 300) -> JWTAuthDependency:
-    """
-    创建JWT认证依赖
-    
-    Args:
-        cache_ttl: 缓存时间（秒）
-        blacklist_cache_ttl: 黑名单缓存时间（秒）
-        
-    Returns:
-        JWTAuthDependency: JWT认证依赖实例
-    """
-    return JWTAuthDependency(cache_ttl, blacklist_cache_ttl)
-
-# 创建默认的JWT依赖实例
-jwt_dependency = create_jwt_dependency(blacklist_cache_ttl=300) 
-
-# 配置JWT中间件
-jwt_middleware = create_jwt_middleware(
-    exclude_paths=["/health", "/docs", "/redoc", "/openapi.json"],
-    exclude_methods=["OPTIONS"],
-    cache_ttl=3600,  # 1小时缓存
-    blacklist_cache_ttl=300  # 5分钟黑名单缓存
-)
+def create_jwt_dependency(
+    cache_ttl: int = 3600,
+    blacklist_cache_ttl: int = 300
+) -> JWTAuthDependency:
+    """创建JWT认证依赖，需传入 settings。业务服务在启动时调用并注入到 deps。"""
+    return JWTAuthDependency(cache_ttl=cache_ttl, blacklist_cache_ttl=blacklist_cache_ttl)

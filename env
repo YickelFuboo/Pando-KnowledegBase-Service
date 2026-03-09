@@ -40,7 +40,7 @@ AUTH_BLACKLIST_ENDPOINT=/blacklist
 # 数据库类型: postgresql 或 mysql
 DATABASE_TYPE=postgresql
 # 数据库名称
-DB_NAME=ml_knowledgebase_service
+DB_NAME=pando_knowledgevector_service
 # 数据库连接池配置
 DB_POOL_SIZE=10
 DB_MAX_OVERFLOW=20
