@@ -16,7 +16,7 @@ from app.infrastructure.storage import STORAGE_CONN
 from app.infrastructure.vector_store import VECTOR_STORE_CONN
 from app.infrastructure.redis import REDIS_CONN
 from app.utils.auth.jwt_middleware import create_jwt_middleware
-from app.domains.api import kb, document, kb_qa, llm_chat
+from app.domains.api import kb, document, kb_qa, llm_chat, concept
 from app.infrastructure.llms.api import llms
 from app.agent_frame.session.api import router as sessions
 
@@ -50,6 +50,7 @@ app.include_router(kb_qa.router, prefix="/api/v1", tags=["问答服务"])
 app.include_router(llms.router, prefix="/api/v1", tags=["模型服务"])
 app.include_router(sessions, prefix="/api/v1", tags=["会话管理"])
 app.include_router(llm_chat.router, prefix="/api/v1", tags=["LLM聊天"])
+app.include_router(concept.router, prefix="/api/v1", tags=["概念管理"])
 
 #==================================
 # 配置中间件

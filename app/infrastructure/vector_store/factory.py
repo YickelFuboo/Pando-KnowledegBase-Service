@@ -40,7 +40,8 @@ class VectorStoreFactory:
                     hosts=settings.es_hosts,
                     username=settings.es_username,
                     password=settings.es_password,
-                    mapping_name=actual_mapping_name
+                    mapping_name=actual_mapping_name,
+                    verify_certs=settings.es_verify_certs,
                 )
             elif db_type == "opensearch":
                 connection = OSConnection(

@@ -126,6 +126,8 @@ VECTOR_STORE_MAPPING=es_doc_mapping.json
 ES_HOSTS=https://localhost:9200
 ES_USERNAME=elastic
 ES_PASSWORD=clover
+# 是否校验 ES 服务端 TLS 证书，本地自签证书可设为 false
+ES_VERIFY_CERTS=false
 
 # OpenSearch配置
 OS_HOSTS=http://localhost:9200

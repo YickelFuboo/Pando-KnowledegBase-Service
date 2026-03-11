@@ -115,6 +115,7 @@ class Settings(BaseSettings):
     es_hosts: str = Field(default="https://localhost:9200", description="Elasticsearch主机地址", env="ES_HOSTS")
     es_username: str = Field(default="elastic", description="Elasticsearch用户名", env="ES_USERNAME")
     es_password: str = Field(default="changeme", description="Elasticsearch密码", env="ES_PASSWORD")
+    es_verify_certs: bool = Field(default=False, description="是否校验 ES 服务端证书，本地 HTTPS 自签证书可设为 False", env="ES_VERIFY_CERTS")
     
     # OpenSearch配置
     os_hosts: str = Field(default="http://localhost:9200", description="OpenSearch主机地址", env="OS_HOSTS")

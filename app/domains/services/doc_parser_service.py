@@ -254,7 +254,11 @@ class DocParserService:
             # 处理标签
             if self.parser_config.get("tag_kb_ids", []):
                 docs = await self._process_auto_tags(docs)
-                
+
+            # 概念提取
+            if self.parser_config.get("auto_concepts", False):
+                docs = await self._process_concept_extraction(docs)
+
             return docs
             
         except Exception as e:
@@ -521,6 +525,30 @@ class DocParserService:
         except Exception as e:
             logging.error(f"为切片生成标签失败: {doc.get('id', 'unknown')}, 错误: {e}")
             return docs
+
+    async def _process_concept_extraction(self, docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """从每个切片中提取名词概念及描述，同名概念合并描述并追加 doc_id。"""
+        from app.domains.services.concept_service import ConceptService
+        try:
+            st = timer()
+            logging.info("开始为每个切片提取概念...")
+            kb_id = str(self.document.kb_id)
+
+            for doc in docs:
+                async with CHAT_LIMITER:
+                    concepts = await ConceptService.extract_concepts(self.db_session, kb_id, doc["content_with_weight"])
+                if concepts:
+                    await ConceptService.create_or_merge(
+                        db_session=self.db_session,
+                        kb_id=str(self.document.kb_id),
+                        doc_id=self.document.id,
+                        concepts=concepts,
+                    )
+            logging.info(f"概念提取完成: {len(docs)} 个切片，耗时 {timer() - st:.2f}秒")
+        except Exception as e:
+            logging.error(f"为切片提取概念失败: {e}")
+        return docs
+
 
     async def _embedding_chunks(self, chunks: List[Dict[str, Any]]) -> tuple:
         """

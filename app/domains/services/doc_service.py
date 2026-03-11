@@ -816,8 +816,14 @@ class DocumentService:
                 tenant_id=tenant_id,
                 kb_id=document.kb_id
             )
-            
             logging.info(f"删除文档 {doc_id} 的切片数据，共删除 {deleted_count} 个chunks")
+
+            # 移除Doc相关概念
+            from app.domains.services.concept_service import ConceptService
+            try:
+                await ConceptService.remove_doc(db_session=session, kb_id=document.kb_id, doc_id=doc_id)
+            except Exception as ce:
+                logging.warning(f"移除文档 {doc_id} 与概念的关联失败: {ce}")
             
         except Exception as e:
             logging.error(f"删除文档切片数据失败: {e}")

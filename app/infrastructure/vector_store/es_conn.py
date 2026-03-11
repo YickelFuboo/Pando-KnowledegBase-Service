@@ -29,7 +29,7 @@ REQUEST_TIMEOUT = 30     # 请求超时（秒）
 class ESConnection(VectorStoreConnection):
     """Elasticsearch连接 - 纯基础设施实现"""
 
-    def __init__(self, hosts: str, username: str = None, password: str = None, mapping_name: str = None):
+    def __init__(self, hosts: str, username: str = None, password: str = None, mapping_name: str = None, verify_certs: bool = False):
         """
         初始化ES连接
         Args:
@@ -37,10 +37,12 @@ class ESConnection(VectorStoreConnection):
             username: 用户名
             password: 密码
             mapping_name: 映射配置文件路径
+            verify_certs: 是否校验服务端 TLS 证书，False 时连接 https 会触发库内 SecurityWarning
         """
         self.hosts = hosts
         self.username = username
         self.password = password
+        self.verify_certs = verify_certs
         self.es = None
         self.info = None
         self.mapping = None
@@ -523,16 +525,16 @@ class ESConnection(VectorStoreConnection):
                 search = search[request.offset:request.offset + request.limit]
             
             query = search.to_dict()
+            query["timeout"] = f"{REQUEST_TIMEOUT}s"
             logging.debug(f"search {str(space_names)} query: " + json.dumps(query))
 
             # 执行搜索
             for attempt in range(ATTEMPT_TIME):
                 try:
                     result = await self.es.search(
-                        index=space_names,   #支持单个名称字符串，或列表中多个名字
-                        body=query, 
-                        timeout=f"{REQUEST_TIMEOUT}s", 
-                        track_total_hits=True, 
+                        index=space_names,
+                        body=query,
+                        track_total_hits=True,
                         _source=True)
 
                     if str(result.get("timed_out", "")).lower() == "true":
@@ -882,12 +884,11 @@ class ESConnection(VectorStoreConnection):
         
         try:
             for attempt in range(ATTEMPT_TIME):   
-                try:        
-                    # 异步连接
+                try:
                     self.es = AsyncElasticsearch(
                         self.hosts.split(","),
                         basic_auth=(self.username, self.password) if self.username and self.password else None,
-                        verify_certs=False,
+                        verify_certs=self.verify_certs,
                         timeout=CONNECTION_TIMEOUT,
                         max_retries=3
                     )
