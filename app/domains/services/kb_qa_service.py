@@ -111,10 +111,9 @@ class QAService:
         # 处理API密钥错误
         if answer.lower().find("invalid key") >= 0 or answer.lower().find("invalid api") >= 0:
             answer += " 请在'用户设置 -> 模型提供商 -> API密钥'中设置LLM API密钥"
-
         
         # 返回结果
-        return {"answer": answer, "reference": refs, "prompt": prompt, "created_at": time.time()}
+        return {"answer": think + answer, "reference": refs, "prompt": prompt, "created_at": time.time()}
 
     @staticmethod
     async def _pre_process_question(
@@ -197,6 +196,9 @@ class QAService:
                 session = await session_manager.get_session(active_session_id)
                 if not session:
                     raise RuntimeError("创建会话失败")
+
+            if not session.description:
+                session.description = question[:200] if question else ""
 
             # 获取历史消息
             history_messages: Optional[List[ChatMessage]] = None
@@ -368,40 +370,23 @@ class QAService:
             
             # 生成回答
             if is_stream:
-                # 流式生成
-                last_ans = ""
+                # 流式生成：chat_stream 每次 yield 的是当次的一小段 delta，直接累加后推送
                 answer = ""
-                
-                # 流式生成答案
                 async for ans in chat_mdl.chat_stream(system_prompt, msgs, {"temperature": DEFAULT_TEMPERATURE}):
-                    # 如果存在思考过程，移除思考部分
                     if thought:
                         ans = re.sub(r"^.*</think>", "", ans, flags=re.DOTALL)
-                    answer = ans
-                    
-                    # 计算增量内容
-                    delta_ans = ans[len(last_ans):]
-                    
-                    # 如果增量内容token数太少，跳过此次输出
-                    if num_tokens_from_string(delta_ans) < 16:
+                    if not ans:
                         continue
-                        
-                    last_ans = answer
-                    
-                    # 返回增量内容
-                    yield {"answer": thought + answer, "reference": {}, "session_id": active_session_id}
-
-                # 处理最后的增量内容
-                delta_ans = answer[len(last_ans):]
-                if delta_ans:
+                    answer += ans
                     yield {"answer": thought + answer, "reference": {}, "session_id": active_session_id}
 
                 # 返回最终装饰后的完整答案
                 final_answer = thought + answer
-                await session_manager.add_message(active_session_id, Message.assistant_message(final_answer))
                 last = await QAService._decorate_answer(final_answer, kbinfos, system_prompt, embd_mdl, RETRIEVALER, enable_quote)
                 if not last.get("answer") and kbinfos.get("chunks"):
                     last["answer"] = "抱歉，模型未能生成回答，请重试。"
+                # 只把最终答案压紧History，不压reference
+                await session_manager.add_message(active_session_id, Message.assistant_message(last.get("answer") or final_answer))
                 yield {**last, "session_id": active_session_id}
             else:
                 # 非流式输出模式：一次性生成完整答案
@@ -409,7 +394,7 @@ class QAService:
 
                 # 装饰答案
                 result = await QAService._decorate_answer(answer, kbinfos, system_prompt, embd_mdl, RETRIEVALER, enable_quote)
-                await session_manager.add_message(active_session_id, Message.assistant_message(result))  #只把最终答案压紧History，不压reference
+                await session_manager.add_message(active_session_id, Message.assistant_message(result.get("answer") or answer))  #只把最终答案压紧History，不压reference
                 yield {**result, "session_id": active_session_id}
 
         except Exception as e:
