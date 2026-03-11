@@ -116,14 +116,14 @@ async def kb_prompt(session, kbinfos, max_tokens):
             logging.warning(f"Not all the retrieval into prompt: {len(knowledges)}/{kwlg_len}")
             break
 
-    # 第二步：获取文档的元数据信息
+    # 第二步：获取Chunk相关的文档、及对应文档的元数据信息
     docs = await DocumentService.get_documents_by_ids(session, [ck["doc_id"] for ck in kbinfos["chunks"][:chunks_num]])
     docs = {d.id: d.meta_fields for d in docs}
 
     # 第三步：按文档名称分组chunks，使用defaultdict自动创建默认结构
     doc2chunks = defaultdict(lambda: {"chunks": [], "meta": []})
     for i, ck in enumerate(kbinfos["chunks"][:chunks_num]):
-        # 构建chunk内容，包含ID和URL信息
+        # 构建chunk内容，包含ID和URL信息 （ID: i 即 prompt 中 ID:0,1,2,... 的下标，对应chunks的下标）
         cnt = f"---\nID: {i}\n" + (f"URL: {ck['url']}\n" if "url" in ck else "")
         # 清理HTML标签和样式，保留纯文本内容
         cnt += re.sub(r"( style=\"[^\"]+\"|</?(html|body|head|title)>|<!DOCTYPE html>)", " ", ck["content_with_weight"], flags=re.DOTALL | re.IGNORECASE)

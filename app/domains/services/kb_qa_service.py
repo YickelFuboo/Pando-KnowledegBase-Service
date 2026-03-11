@@ -66,13 +66,15 @@ class QAService:
 
         refs = {}
 
-        # 处理引用插入
+        # 引用机制说明：prompt 中知识片段以 ID:0,1,2,... 表示（找回的 chunks[i] 的下标），答案中 [ID:i] 的 i 即该下标。
+        # chunks对应的原始文档信息通过refs[]返回，refs[i] 与 chunks[i]  顺序一致
+        # 所以，前台收到相应后如果想定位文档，可以通过answer中的 [ID:i]的下标，找到refs[i]，从而定位文档。
         if enable_quote:
-            idx = set([])
+            chunk_idxs = set([])
             
             # 如果答案中没有引用标记且启用了嵌入模型，自动插入引用
             if embd_mdl and not re.search(r"\[ID:([0-9]+)\]", answer):
-                answer, idx = await retriever.insert_citations(
+                answer, chunk_idxs = await retriever.insert_citations(
                     answer,
                     [ck["content_ltks"] for ck in kbinfos["chunks"]],
                     [ck["vector"] for ck in kbinfos["chunks"]],
@@ -85,17 +87,17 @@ class QAService:
                 for match in re.finditer(r"\[ID:([0-9]+)\]", answer):
                     i = int(match.group(1))
                     if i < len(kbinfos["chunks"]):
-                        idx.add(i)
+                        chunk_idxs.add(i)
 
             # 修复错误的引用格式
-            answer, idx = QAService.repair_bad_citation_formats(answer, kbinfos, idx)
+            answer, chunk_idxs = QAService.repair_bad_citation_formats(answer, kbinfos, chunk_idxs)
             
             # 处理文档聚合信息，只保留被引用的文档
-            idx = set([kbinfos["chunks"][int(i)]["doc_id"] for i in idx])
-            recall_docs = [d for d in kbinfos["doc_aggs"] if d["doc_id"] in idx]
+            doc_idxs = set([kbinfos["chunks"][int(i)]["doc_id"] for i in chunk_idxs])
+            recall_docs = [d for d in kbinfos["doc_aggs"] if d["doc_id"] in doc_idxs]
             if not recall_docs:
                 recall_docs = kbinfos["doc_aggs"]
-            kbinfos["doc_aggs"] = recall_docs
+            kbinfos["doc_aggs"] = recall_docs  # 只保留被引用的文档
             
             # 准备引用信息，移除向量数据以减小响应大小
             refs = deepcopy(kbinfos)
@@ -407,7 +409,7 @@ class QAService:
 
                 # 装饰答案
                 result = await QAService._decorate_answer(answer, kbinfos, system_prompt, embd_mdl, RETRIEVALER, enable_quote)
-                await session_manager.add_message(active_session_id, Message.assistant_message(answer))
+                await session_manager.add_message(active_session_id, Message.assistant_message(result))  #只把最终答案压紧History，不压reference
                 yield {**result, "session_id": active_session_id}
 
         except Exception as e:
