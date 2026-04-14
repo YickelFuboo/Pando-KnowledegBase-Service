@@ -8,11 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from fastapi.responses import Response
 from app.infrastructure.database import get_db
 from app.domains.schemes.document import (
-    FileUploadResult,
+    CreateDocumentFromFileResult,
+    CreateDocumentFromUrlResult,
     DocumentResponse,
     ListDocumentResponse,
     DocumentChunksResponse,
     UpdateDocumentRequest,
+    UpdateDocumentFromUrlRequest,
     UpdateDocumentMetaFieldsRequest,
     ParserResult,
 )
@@ -26,8 +28,8 @@ from app.domains.services.common.file_service import FileService, FileUsage
 router = APIRouter(prefix="/documents", tags=["文档管理"])
 
 # 上传文件
-@router.post("/upload", response_model=list[FileUploadResult])
-async def upload_documents(
+@router.post("/upload_files", response_model=list[CreateDocumentFromFileResult])
+async def upload_documents_from_files(
     kb_id: str = Form(..., description="知识库ID"),
     files: List[UploadFile] = File(..., description="上传的文件"),
     user_id: str = Query(..., description="用户ID"),
@@ -53,13 +55,28 @@ async def upload_documents(
         # 批量处理文件上传
         results = []
         for file in files:
-            result = await DocumentService.upload_document_to_kb(
-                session=session,
-                kb=kb,
-                file=file,
-                created_by=user_id
-            )
-            results.append(result)
+            try:
+                document = await DocumentService.create_document_from_file(
+                    session=session,
+                    kb=kb,
+                    file=file,
+                    created_by=user_id
+                )
+                results.append(
+                    CreateDocumentFromFileResult(
+                        filename=file.filename or "",
+                        success=True,
+                        document_id=document.id,
+                    )
+                )
+            except Exception as e:
+                results.append(
+                    CreateDocumentFromFileResult(
+                        filename=file.filename or "",
+                        success=False,
+                        error=str(e),
+                    )
+                )
         
         return results
         
@@ -69,6 +86,188 @@ async def upload_documents(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"message": f"上传文档失败: {str(e)}"}
         )
+
+@router.post("/upload_urls", response_model=list[CreateDocumentFromUrlResult])
+async def upload_documents_from_urls(
+    kb_id: str = Form(..., description="知识库ID"),
+    urls: List[str] = Form(..., description="网页URL列表"),
+    user_id: str = Query(..., description="用户ID"),
+    session: AsyncSession = Depends(get_db)
+):
+    """根据网页URL批量创建文档（不自动解析）。"""
+    try:
+        kb = await KBService.get_kb_by_id(session, kb_id)
+        if not kb:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"message": "知识库不存在"}
+            )
+        if kb.owner_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"message": "无权限操作此知识库"}
+            )
+
+        results = []
+        for url in urls:
+            try:
+                document = await DocumentService.create_document_from_url(
+                    session=session,
+                    kb=kb,
+                    url=url,
+                    created_by=user_id
+                )
+                results.append(
+                    CreateDocumentFromUrlResult(
+                        url=url,
+                        success=True,
+                        document_id=document.id,
+                    )
+                )
+            except Exception as e:
+                results.append(
+                    CreateDocumentFromUrlResult(
+                        url=url,
+                        success=False,
+                        error=str(e),
+                    )
+                )
+        return results
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"根据URL创建文档失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"message": f"根据URL创建文档失败: {str(e)}"}
+        )
+
+
+# 替换文件
+@router.post("/{doc_id}/reload_file", response_model=DocumentResponse)
+async def reload_document(
+    doc_id: str,
+    file: UploadFile = File(..., description="新文件"),
+    user_id: str = Query(..., description="用户ID"),
+    session: AsyncSession = Depends(get_db)
+):
+    """重新加载文档（替换文件）"""
+    try:
+        # 获取原文档信息
+        document = await DocumentService.get_document_by_id(session, doc_id)
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"message": "文档不存在"}
+            )
+        
+        # 验证权限
+        if document.created_by != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"message": "无权限重新加载此文档"}
+            )
+        
+        # 重新加载文档（删除旧文档，创建新文档）
+        reloaded_document = await DocumentService.update_document_file(
+            session=session,
+            doc_id=doc_id,
+            file=file,
+            created_by=user_id
+        )
+        
+        # 构建响应
+        response_data = {
+            "id": reloaded_document.id,
+            "kb_id": reloaded_document.kb_id,
+            "name": reloaded_document.name,
+            "description": reloaded_document.description,
+            "type": reloaded_document.type,
+            "suffix": reloaded_document.suffix,
+            "file_id": reloaded_document.file_id,
+            "size": reloaded_document.size,
+            "thumbnail": reloaded_document.thumbnail_id,
+            "parser_id": reloaded_document.parser_id,
+            "parser_config": reloaded_document.parser_config,
+            "source_type": reloaded_document.source_type,
+            "web_url": reloaded_document.web_url,
+            "process_status": reloaded_document.process_status,
+            "chunk_count": 0, #初始状态，直接返回0
+            "created_by": reloaded_document.created_by,
+            "created_at": reloaded_document.created_at,
+            "updated_at": reloaded_document.updated_at
+        }
+        
+        return DocumentResponse(**response_data)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"重新加载文档失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"message": f"重新加载文档失败: {str(e)}"}
+        )
+
+@router.post("/{doc_id}/reload_url", response_model=DocumentResponse)
+async def reload_document_from_url(
+    doc_id: str,
+    request: UpdateDocumentFromUrlRequest,
+    user_id: str = Query(..., description="用户ID"),
+    session: AsyncSession = Depends(get_db)
+):
+    """通过网页URL重新加载文档内容（不自动解析）。"""
+    try:
+        document = await DocumentService.get_document_by_id(session, doc_id)
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"message": "文档不存在"}
+            )
+        if document.created_by != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"message": "无权限重新加载此文档"}
+            )
+
+        reloaded_document = await DocumentService.update_document_from_url(
+            session=session,
+            doc_id=doc_id,
+            url=request.url,
+            created_by=user_id
+        )
+
+        response_data = {
+            "id": reloaded_document.id,
+            "kb_id": reloaded_document.kb_id,
+            "name": reloaded_document.name,
+            "description": reloaded_document.description,
+            "type": reloaded_document.type,
+            "suffix": reloaded_document.suffix,
+            "file_id": reloaded_document.file_id,
+            "size": reloaded_document.size,
+            "thumbnail": reloaded_document.thumbnail_id,
+            "parser_id": reloaded_document.parser_id,
+            "parser_config": reloaded_document.parser_config,
+            "meta_fields": reloaded_document.meta_fields,
+            "source_type": reloaded_document.source_type,
+            "web_url": reloaded_document.web_url,
+            "process_status": reloaded_document.process_status,
+            "chunk_count": 0,
+            "created_by": reloaded_document.created_by,
+            "created_at": reloaded_document.created_at,
+            "updated_at": reloaded_document.updated_at
+        }
+        return DocumentResponse(**response_data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"通过URL重新加载文档失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"message": f"通过URL重新加载文档失败: {str(e)}"}
+        )
+
 
 @router.get("/{doc_id}", response_model=DocumentResponse)
 async def get_document_detail(
@@ -103,6 +302,7 @@ async def get_document_detail(
             "parser_id": document.parser_id,
             "parser_config": document.parser_config,
             "source_type": document.source_type,
+            "web_url": document.web_url,
             "process_status": document.process_status,
             "chunk_count": chunk_count,
             "created_by": document.created_by,
@@ -169,6 +369,7 @@ async def update_document(
             "parser_id": updated_document.parser_id,
             "parser_config": updated_document.parser_config,
             "source_type": updated_document.source_type,
+            "web_url": updated_document.web_url,
             "process_status": updated_document.process_status,
             "chunk_count": chunk_count,
             "created_by": updated_document.created_by,
@@ -223,7 +424,6 @@ async def delete_document(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"message": f"删除文档失败: {str(e)}"}
         )
-
 
 @router.get("/{doc_id}/download")
 async def download_document(
@@ -280,71 +480,6 @@ async def download_document(
             detail={"message": f"下载文档失败: {str(e)}"}
         )
 
-# 替换文件
-@router.post("/{doc_id}/reload", response_model=DocumentResponse)
-async def reload_document(
-    doc_id: str,
-    file: UploadFile = File(..., description="新文件"),
-    user_id: str = Query(..., description="用户ID"),
-    session: AsyncSession = Depends(get_db)
-):
-    """重新加载文档（替换文件）"""
-    try:
-        # 获取原文档信息
-        document = await DocumentService.get_document_by_id(session, doc_id)
-        if not document:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"message": "文档不存在"}
-            )
-        
-        # 验证权限
-        if document.created_by != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={"message": "无权限重新加载此文档"}
-            )
-        
-        # 重新加载文档（删除旧文档，创建新文档）
-        reloaded_document = await DocumentService.update_document_file(
-            session=session,
-            doc_id=doc_id,
-            file=file,
-            created_by=user_id
-        )
-        
-        # 构建响应
-        response_data = {
-            "id": reloaded_document.id,
-            "kb_id": reloaded_document.kb_id,
-            "name": reloaded_document.name,
-            "description": reloaded_document.description,
-            "type": reloaded_document.type,
-            "suffix": reloaded_document.suffix,
-            "file_id": reloaded_document.file_id,
-            "size": reloaded_document.size,
-            "thumbnail": reloaded_document.thumbnail_id,
-            "parser_id": reloaded_document.parser_id,
-            "parser_config": reloaded_document.parser_config,
-            "source_type": reloaded_document.source_type,
-            "process_status": reloaded_document.process_status,
-            "chunk_count": 0, #初始状态，直接返回0
-            "created_by": reloaded_document.created_by,
-            "created_at": reloaded_document.created_at,
-            "updated_at": reloaded_document.updated_at
-        }
-        
-        return DocumentResponse(**response_data)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"重新加载文档失败: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"message": f"重新加载文档失败: {str(e)}"}
-        )
-
 @router.get("/kb/{kb_id}/list", response_model=ListDocumentResponse)
 async def get_documents_by_kb(
     kb_id: str,
@@ -386,6 +521,7 @@ async def get_documents_by_kb(
                 "parser_id": doc.parser_id,
                 "parser_config": doc.parser_config,
                 "source_type": doc.source_type,
+                "web_url": doc.web_url,
                 "process_status": doc.process_status,
                 "chunk_count": chunk_count,
                 "created_by": doc.created_by,
@@ -537,7 +673,6 @@ async def get_documents_chunks_batch(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"message": f"批量获取文档切片列表失败: {str(e)}"}
         )
-
 
 @router.put("/{doc_id}/meta-fields", response_model=DocumentResponse)
 async def update_document_meta_fields(

@@ -7,25 +7,26 @@ import asyncio
 from pathlib import Path
 from google import genai
 from google.genai import types
-from app.infrastructure.llms.computervision_models.base.base import BaseComputerVision, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.prompts.prompt_template_load import get_prompt_template
+from .base import BaseComputerVision, MAX_RETRY_ATTEMPTS
+from ..prompts.prompt_template_load import get_prompt_template
 
 
 class GeminiCV(BaseComputerVision):
     """Google Gemini 计算机视觉模型实现（google-genai 新 SDK）"""
 
-    def __init__(self, api_key: str, model_name: str = "gemini-1.0-pro-vision-latest",
+    def __init__(self, api_key: str, model_provider: str, model_name: str = "gemini-1.0-pro-vision-latest",
                  base_url: Optional[str] = None, language: str = "Chinese"):
         """
         初始化Google Gemini计算机视觉模型
 
         Args:
             api_key (str): Google API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称，默认为gemini-1.0-pro-vision-latest
             base_url (Optional[str]): API基础URL
             language (str): 语言设置
         """
-        super().__init__(api_key, model_name, base_url, language)
+        super().__init__(api_key, model_provider, model_name, base_url, language)
         self.client = genai.Client(api_key=api_key)
 
     async def describe(self, image: Union[str, bytes, BytesIO, Any]) -> Tuple[str, int]:

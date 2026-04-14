@@ -4,18 +4,19 @@ from typing import List, Tuple
 import numpy as np
 import aiohttp
 import urllib.parse
-from app.infrastructure.llms.rerank_models.base import BaseRank, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.utils import num_tokens_from_string
+from .base import BaseRank, MAX_RETRY_ATTEMPTS
+
 
 class SiliconflowRank(BaseRank):
     """SILICONFLOW重排序模型实现"""
     
-    def __init__(self, api_key: str, model_name: str, base_url: str = "https://api.siliconflow.cn/v1", **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: str = "https://api.siliconflow.cn/v1", **kwargs):
         """
         初始化SILICONFLOW重排序模型
         
         Args:
             api_key (str): API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (str): API基础URL
             **kwargs: 其他参数
@@ -27,7 +28,7 @@ class SiliconflowRank(BaseRank):
             else:
                 base_url = base_url + "/rerank"
 
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         self.headers = {
             "accept": "application/json",
             "content-type": "application/json",

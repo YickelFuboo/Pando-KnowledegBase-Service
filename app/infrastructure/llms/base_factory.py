@@ -1,4 +1,5 @@
 import json
+from nt import rename
 import os
 import time
 import hashlib
@@ -6,10 +7,16 @@ import threading
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
-from typing import Dict, Any, Optional, Type, TypeVar, Generic, Tuple
+from typing import Dict, Any, Optional, Type, TypeVar, Generic, Tuple, List, Set
 from app.config.settings import PROJECT_BASE_DIR
 
+
 DEFAULT_CACHE_TTL_SECONDS = 3600
+
+# 模型熔断常量
+MODEL_FAILS_BEFORE_BLOCK = 3
+MODEL_BLOCK_SECONDS = 600.0
+MAX_RETRY_MODEL_PAIRS = 2
 
 T = TypeVar('T')
 
@@ -31,9 +38,14 @@ class BaseModelFactory(ABC, Generic[T]):
         """
         self.config_path = os.path.join(PROJECT_BASE_DIR, "app", "config", config_filename)
         self._config = None
+        # 实例缓存
         self._instance_cache_lock = threading.Lock()
         self._instance_cache: OrderedDict = OrderedDict()
         self._cache_ttl_seconds = DEFAULT_CACHE_TTL_SECONDS
+        # 模型熔断
+        self._model_state_lock = threading.Lock()
+        self._model_fail_counts: Dict[Tuple[str, str], int] = {}
+        self._model_blocked_until: Dict[Tuple[str, str], float] = {}
         self.load_config()
 
     def clear_instance_cache(self):
@@ -52,44 +64,41 @@ class BaseModelFactory(ABC, Generic[T]):
     
     def get_supported_models(self) -> Dict[str, Any]:
         """
-        获取支持的供应方和模型支持的全集（只返回is_valid为1的）
+        获取支持的供应方和模型支持的全集（只返回is_valid为1的），并附带默认模型。
         
         Returns:
-            Dict[str, Any]: 所有支持的模型信息，结构为：
-            {
-                "provider_name": {
-                    "description": "provider_description",
-                    "models": {
-                        "model_name": {
-                            "description": "model_description"
-                        }
+            Dict[str, Any]: {
+                "supported": {
+                    "provider_name": {
+                        "description": "provider_description",
+                        "models": { "model_name": { "description": "model_description" } }
                     }
-                }
+                },
+                "default": {"provider": "...", "model": "..."} 或 None
             }
         """
         result = {}
         all_models = self._config.get("models", {})
         
         for provider_name, provider_config in all_models.items():
-            # 只处理is_valid为1的provider
             if provider_config.get("is_valid", 0) == 1:
                 provider_info = {
                     "description": provider_config.get("description", ""),
-                    "models": {}
+                    "models": {},
                 }
-                
-                # 获取该provider下的所有模型
                 instances = provider_config.get("instances", {})
                 for model_name, model_config in instances.items():
                     provider_info["models"][model_name] = {
-                        "description": model_config.get("description", "")
+                        "description": model_config.get("description", ""),
                     }
-                
-                # 只有当该provider有有效模型时才添加到结果中
                 if provider_info["models"]:
                     result[provider_name] = provider_info
-        
-        return result
+        try:
+            provider, model = self.get_default_model()
+            default = {"provider": provider, "model": model}
+        except Exception:
+            default = None
+        return {"supported": result, "default": default}
 
     def if_model_support(self, provider: str, model: str) -> bool:
         """
@@ -107,7 +116,6 @@ class BaseModelFactory(ABC, Generic[T]):
 
         return True
 
-    
     def get_model_info_by_name(self, model: str) -> Dict[str, Any]:
         """
         根据模型名称获取模型信息
@@ -295,6 +303,7 @@ class BaseModelFactory(ABC, Generic[T]):
         # 创建模型实例
         instance = model_class(
             api_key=api_key,
+            model_provider=provider,
             model_name=model,
             base_url=base_url,
             language=language,
@@ -308,3 +317,50 @@ class BaseModelFactory(ABC, Generic[T]):
                 self._instance_cache.move_to_end(cache_key)
 
         return instance
+    
+    def _is_model_blocked(self, provider: str, model: str) -> bool:
+        """判断模型是否处于熔断状态"""
+        k = (provider, model)
+        with self._model_state_lock:
+            until = self._model_blocked_until.get(k)
+            if until is None:
+                return False
+            if time.monotonic() < until:
+                return True
+            del self._model_blocked_until[k]
+            return False
+
+    def _clear_model_block(self, provider: str, model: str) -> None:
+        """清除模型熔断状态"""
+        k = (provider, model)
+        with self._model_state_lock:
+            self._model_fail_counts.pop(k, None)
+            self._model_blocked_until.pop(k, None)
+
+    def _count_model_failure(self, provider: str, model: str) -> None:
+        """计数模型失败次数"""
+        k = (provider, model)
+        with self._model_state_lock:
+            n = self._model_fail_counts.get(k, 0) + 1
+            if n >= self._MODEL_FAILS_BEFORE_BLOCK:
+                self._model_blocked_until[k] = time.monotonic() + self._MODEL_BLOCK_SECONDS
+                self._model_fail_counts.pop(k, None)
+            else:
+                self._model_fail_counts[k] = n
+
+    def _get_retry_model_pairs(
+        self,
+        model_provider: Optional[str],
+        model_name: Optional[str],
+    ) -> List[Tuple[str, str]]:
+        """获取可用的重试（失败后换用）模型列表"""
+        supported = (self.get_supported_models().get("supported") or {})
+        valid_list: List[Tuple[str, str]] = []
+        for pname, pinfo in supported.items():
+            for mn in (pinfo.get("models") or {}).keys():
+                valid_list.append((pname, mn))
+        valid_list.sort(key=lambda x: (x[0], x[1]))
+
+        # 去掉用户指定的模型外的其他模型作为重试模型
+        retry_list =  [(p, m) for p, m in valid_list if (p, m) != (model_provider, model_name)]
+        return retry_list[:MAX_RETRY_MODEL_PAIRS]

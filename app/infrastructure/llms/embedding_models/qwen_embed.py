@@ -4,23 +4,24 @@ from typing import List, Tuple
 import asyncio
 import dashscope
 import logging
-from app.infrastructure.llms.embedding_models.base import BaseEmbedding, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.utils import truncate
+from .base import BaseEmbedding, MAX_RETRY_ATTEMPTS
+from ..utils import truncate
 
 
 class QWenEmbed(BaseEmbedding):
     """通义千问嵌入模型实现"""
 
-    def __init__(self, api_key: str, model_name: str = "text_embedding_v2", **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str = "text_embedding_v2", **kwargs):
         """
         初始化通义千问嵌入模型
         
         Args:
             api_key (str): API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称，默认为text_embedding_v2
             **kwargs: 其他参数
         """
-        super().__init__(api_key, model_name, **kwargs)
+        super().__init__(api_key, model_provider, model_name, **kwargs)
 
     async def encode(self, texts: List[str]) -> Tuple[np.ndarray, int]:
         """

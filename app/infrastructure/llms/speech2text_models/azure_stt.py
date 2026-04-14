@@ -2,25 +2,26 @@ from typing import Any, Optional
 import asyncio
 import logging
 from openai.lib.azure import AsyncAzureOpenAI
-from app.infrastructure.llms.speech2text_models.base import BaseSTT, MAX_RETRY_ATTEMPTS, CONNECTION_TIMEOUT
+from .base import BaseSTT, MAX_RETRY_ATTEMPTS, CONNECTION_TIMEOUT
 
 
 
 class AzureSTT(BaseSTT):
     """Azure OpenAI的语音转文本模型实现"""
 
-    def __init__(self, api_key: str, model_name: str, base_url: str, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: str, **kwargs):
         """
         初始化Azure OpenAI语音转文本模型
         
         Args:
             api_key (str): Azure API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (str): Azure端点URL
             lang (str): 语言，默认为Chinese
             **kwargs: 其他参数
         """
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         
         self.client = AsyncAzureOpenAI(
             api_key=api_key, 

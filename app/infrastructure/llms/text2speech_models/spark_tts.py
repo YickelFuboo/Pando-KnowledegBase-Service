@@ -14,8 +14,7 @@ from typing import Generator, Optional
 from urllib.parse import urlencode
 from wsgiref.handlers import format_date_time
 import websocket
-from app.infrastructure.llms.text2speech_models.base import BaseTTS, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.utils import num_tokens_from_string
+from .base import BaseTTS, MAX_RETRY_ATTEMPTS
 
 
 class SparkTTS(BaseTTS):
@@ -25,16 +24,17 @@ class SparkTTS(BaseTTS):
     STATUS_CONTINUE_FRAME = 1
     STATUS_LAST_FRAME = 2
 
-    def __init__(self, api_key: str, model_name: str, base_url: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: Optional[str] = None, **kwargs):
         """
         初始化Spark TTS模型
         
         Args:
             api_key (str): JSON格式的API密钥，包含spark_app_id、spark_api_secret、spark_api_key
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (Optional[str]): API基础URL（Spark使用WebSocket，此参数忽略）
         """
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         
         # 解析API密钥
         key_data = json.loads(api_key)

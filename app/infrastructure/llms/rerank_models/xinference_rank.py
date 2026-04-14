@@ -4,19 +4,20 @@ import numpy as np
 import aiohttp
 import asyncio
 import logging
-from app.infrastructure.llms.rerank_models.base import BaseRank, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.utils import truncate, num_tokens_from_string
+from .base import BaseRank, MAX_RETRY_ATTEMPTS
+from ..utils import truncate
 
 
 class XinferenceRank(BaseRank):
     """Xinference重排序模型实现"""
     
-    def __init__(self, api_key: str = "x", model_name: str = "", base_url: str = "", **kwargs):
+    def __init__(self, api_key: str = "x", model_provider: str = "xinference", model_name: str = "", base_url: str = "", **kwargs):
         """
         初始化Xinference重排序模型
         
         Args:
             api_key (str): API密钥，默认为"x"
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (str): API基础URL
         """
@@ -25,7 +26,7 @@ class XinferenceRank(BaseRank):
         if base_url.find("/rerank") == -1:
             base_url = urljoin(base_url, "/v1/rerank")
         
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         
         self.headers = {
             "Content-Type": "application/json", 

@@ -3,26 +3,26 @@ import asyncio
 import logging
 from typing import Any, Optional, Tuple
 from openai import AsyncOpenAI
-from app.infrastructure.llms.speech2text_models.base import BaseSTT, MAX_RETRY_ATTEMPTS, CONNECTION_TIMEOUT
-from app.infrastructure.llms.utils import num_tokens_from_string
+from .base import BaseSTT, MAX_RETRY_ATTEMPTS, CONNECTION_TIMEOUT
 
 
 class OpenAISTT(BaseSTT):
     """OpenAI的语音转文本模型实现"""
 
-    def __init__(self, api_key: str, model_name: str = "whisper-1", base_url: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str = "whisper-1", base_url: Optional[str] = None, **kwargs):
         """
         初始化OpenAI语音转文本模型
         
         Args:
             api_key (str): OpenAI API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称，默认为whisper-1
             base_url (Optional[str]): API基础URL，默认为OpenAI官方URL
         """
         if not base_url:
             base_url = "https://api.openai.com/v1"
         
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=CONNECTION_TIMEOUT)
 

@@ -4,17 +4,19 @@ import numpy as np
 import aiohttp
 import asyncio
 import urllib.parse
-from app.infrastructure.llms.embedding_models.base import BaseEmbedding, MAX_RETRY_ATTEMPTS
+from .base import BaseEmbedding, MAX_RETRY_ATTEMPTS
+
 
 class SILICONFLOWEmbed(BaseEmbedding):
     """SiliconFlow嵌入模型实现"""
 
-    def __init__(self, api_key: str, model_name: str, base_url: str = "https://api.siliconflow.cn/v1/embeddings", **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: str = "https://api.siliconflow.cn/v1/embeddings", **kwargs):
         """
         初始化SiliconFlow嵌入模型
         
         Args:
             api_key (str): API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (str): API基础URL，默认为SiliconFlow官方URL
             **kwargs: 其他参数（如description等）
@@ -23,7 +25,7 @@ class SILICONFLOWEmbed(BaseEmbedding):
         if not base_url.endswith("embeddings"):
             base_url = urllib.parse.urljoin(base_url, "embeddings")
 
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
 
         self.headers = {
             "accept": "application/json",

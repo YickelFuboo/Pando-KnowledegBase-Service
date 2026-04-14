@@ -3,23 +3,24 @@ import numpy as np
 import aiohttp
 import asyncio
 import logging
-from app.infrastructure.llms.embedding_models.base import BaseEmbedding, MAX_RETRY_ATTEMPTS
+from .base import BaseEmbedding, MAX_RETRY_ATTEMPTS
 
 
 class NvidiaEmbed(BaseEmbedding):
     """NVIDIA嵌入模型实现"""
 
-    def __init__(self, api_key: str, model_name: str, base_url: str = "https://integrate.api.nvidia.com/v1/embeddings", **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: str = "https://integrate.api.nvidia.com/v1/embeddings", **kwargs):
         """
         初始化NVIDIA嵌入模型
         
         Args:
             api_key (str): NVIDIA API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (str): API基础URL
             **kwargs: 其他参数
         """
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         
         # 根据模型名称调整URL和模型名
         if model_name == "nvidia/embed-qa-4":

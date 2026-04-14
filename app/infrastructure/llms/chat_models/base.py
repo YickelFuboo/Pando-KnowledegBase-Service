@@ -1,50 +1,67 @@
 import asyncio
 import json
-import os
-import random
-import time
-from abc import ABC, abstractmethod
-from copy import deepcopy
-from typing import Any, Dict, List, Literal, Optional, Union, AsyncGenerator, Protocol, Tuple
-from urllib.parse import urljoin
-import json_repair
-import openai
-import requests
-from openai import OpenAI
-from openai.lib.azure import AzureOpenAI
-from pydantic import BaseModel
-import asyncio
 import logging
-from app.utils.common import is_chinese
-from app.infrastructure.llms.chat_models.schemes import ChatResponse, AskToolResponse
+import random
+from abc import ABC
+from typing import Any,AsyncGenerator,Dict,List,Literal,Optional,Tuple
+import httpx
+from .schemes import AskToolResponse,ChatResponse,ModelLimits,TokenUsage
 
 
 # 重试配置常量
 MAX_RETRY_ATTEMPTS = 3  # 最大尝试次数
 RETRY_DELAY = 2  # 重试间隔（秒）
-CONNECTION_TIMEOUT = 30  # 连接超时（秒）
+CONNECTION_TIMEOUT = 30  # 默认连接超时（秒）
+DEFAULT_READ_TIMEOUT = 300.0  # 默认读超时（秒），LLM 首包与流式间隔
+DEFAULT_WRITE_TIMEOUT = 120.0  # 默认写超时（秒）
+DEFAULT_POOL_TIMEOUT = 30.0  # 默认连接池超时（秒）
+
+
+def build_llm_httpx_timeout(**kwargs: Any) -> httpx.Timeout:
+    """从模型配置构造 httpx 分阶段超时，供 openai.AsyncOpenAI 等接受 httpx.Timeout 的客户端使用（DeepSeek/Qwen/SiliconFlow 等走同一 SDK 即复用，与是否 OpenAI 厂商无关）。"""
+    def _to_float(key: str, default: float) -> float:
+        v = kwargs.get(key)
+        if v is None:
+            return default
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return default
+    return httpx.Timeout(
+        connect=_to_float("timeout_connect", float(CONNECTION_TIMEOUT)),
+        read=_to_float("timeout_read", DEFAULT_READ_TIMEOUT),
+        write=_to_float("timeout_write", DEFAULT_WRITE_TIMEOUT),
+        pool=_to_float("timeout_pool", DEFAULT_POOL_TIMEOUT),
+    )
 
 
 class LLM(ABC):
     """LLM基类，提供通用的聊天功能和工具调用支持"""
     
-    def __init__(self, api_key: str, model_name: str, base_url: Optional[str] = None, language: str = "Chinese", **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: Optional[str] = None, language: str = "Chinese", **kwargs):
         """
         初始化LLM基类
         
         Args:
             api_key (str): API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (Optional[str]): API基础URL
             language (str): 语言设置，默认为中文
             kwargs (dict): 其他参数
         """
         self.api_key = api_key
+        self.model_provider = model_provider
         self.model_name = model_name
         self.base_url = base_url
         self.language = language
         self.configs = kwargs
         self.max_length = kwargs.get("max_length", 8192)
+        self.limits = ModelLimits(
+            context_limit=(kwargs.get("context_limit") if isinstance(kwargs.get("context_limit"), int) else None),
+            max_output_tokens=(kwargs.get("max_tokens") if isinstance(kwargs.get("max_tokens"), int) else None),
+            max_input_tokens=(kwargs.get("max_input_tokens") if isinstance(kwargs.get("max_input_tokens"), int) else None),
+        )
 
     def _format_message(
         self,
@@ -71,7 +88,8 @@ class LLM(ABC):
                   user_prompt: str,
                   user_question: str,
                   history: List[Dict[str, Any]] = None,
-                  **kwargs) -> Tuple[ChatResponse, int]:
+                  with_think: Optional[bool] = False,
+                  **kwargs) -> Tuple[ChatResponse, TokenUsage]:
         """执行聊天对话，子类必须实现
         
         Args:
@@ -79,6 +97,7 @@ class LLM(ABC):
             user_prompt (str): 用户提示词
             user_question (str): 用户问题
             history (Optional[List[Dict[str, Any]]]): 历史消息
+            with_think (bool): 是否开启思考
             kwargs (dict): 其他参数
         Returns:
             ChatResponse: 聊天响应
@@ -91,7 +110,8 @@ class LLM(ABC):
                 user_prompt: str,
                 user_question: str,
                 history: List[Dict[str, Any]] = None,
-                **kwargs) -> Tuple[AsyncGenerator[str, None], int]:
+                with_think: Optional[bool] = False,
+                **kwargs) -> Tuple[AsyncGenerator[str, None], TokenUsage]:
         """执行聊天对话，子类必须实现
         
         Args:
@@ -99,6 +119,7 @@ class LLM(ABC):
             user_prompt (str): 用户提示词
             user_question (str): 用户问题
             history (Optional[List[Dict[str, Any]]]): 历史消息
+            with_think (bool): 是否开启思考
             kwargs (dict): 其他参数
         Returns:
             ChatResponse: 聊天响应
@@ -113,7 +134,8 @@ class LLM(ABC):
                        history: List[Dict[str, Any]] = None,
                        tools: Optional[List[dict]] = None,
                        tool_choice: Literal["none", "auto", "required"] = "auto",
-                       **kwargs) -> Tuple[AskToolResponse, int]:
+                       with_think: Optional[bool] = False,
+                       **kwargs) -> Tuple[AskToolResponse, TokenUsage]:
         """执行工具调用，子类必须实现
         
         Args:
@@ -123,6 +145,7 @@ class LLM(ABC):
             history (Optional[List[Dict[str, Any]]]): 历史消息
             tools (Optional[List[dict]]): 工具列表
             tool_choice (Literal["none", "auto", "required"]): 工具选择模式
+            with_think (bool): 是否开启思考
             kwargs (dict): 其他参数
         Returns:
             AskToolResponse: 工具调用响应
@@ -136,7 +159,8 @@ class LLM(ABC):
                        history: List[Dict[str, Any]] = None,
                        tools: Optional[List[dict]] = None,
                        tool_choice: Literal["none", "auto", "required"] = "auto",
-                       **kwargs) -> Tuple[AsyncGenerator[str, None], int]:
+                       with_think: Optional[bool] = False,
+                       **kwargs) -> Tuple[AsyncGenerator[str, None], TokenUsage]:
         """执行工具调用，子类必须实现
         
         Args:
@@ -146,6 +170,7 @@ class LLM(ABC):
             history (Optional[List[Dict[str, Any]]]): 历史消息
             tools (Optional[List[dict]]): 工具列表
             tool_choice (Literal["none", "auto", "required"]): 工具选择模式
+            with_think (bool): 是否开启思考
             kwargs (dict): 其他参数
         Returns:
             AskToolResponse: 工具调用响应
@@ -155,17 +180,35 @@ class LLM(ABC):
     
     def _is_retryable_error(self, error: Exception) -> bool:
         """判断错误是否可重试）"""
-        error_str = str(error).lower()
+        if self._is_context_overflow_error(error):
+            return False
         
+        error_str = str(error).lower()        
         # 扩展重试条件，包含更多网络相关错误
         retryable_keywords = [
             'rate limit', '429', 'server', '502', '503', '504', '500',
-            'connection', 'timeout', 'network', 'temporary', 'busy', 
+            'connection', 'timeout', 'timed out', 'network', 'temporary', 'busy', 
             'overload', 'service unavailable', 'internal server error',
             'bad gateway', 'gateway timeout', 'too many requests'
         ]
         
         return any(keyword in error_str for keyword in retryable_keywords)
+
+    def _is_context_overflow_error(self, error: Exception) -> bool:
+        s = str(error).lower()
+        keywords = (
+            "context length",
+            "maximum context",
+            "max context",
+            "context window",
+            "exceeds the context",
+            "exceed context",
+            "too many tokens",
+            "prompt is too long",
+            "input is too long",
+            "context_limit",
+        )
+        return any(k in s for k in keywords)
 
 
     def _get_delay(self, attempt: int = 0):
@@ -207,25 +250,6 @@ class LLM(ABC):
         
         return content
 
-
-    def _total_token_count(self, response):
-        """从响应中提取token总数，适配多种响应格式"""
-        try:
-            # OpenAI格式：response.usage.total_tokens
-            return response.usage.total_tokens
-        except AttributeError:
-            pass
-        
-        try:
-            # Claude格式：response.usage.input_tokens + response.usage.output_tokens
-            return response.usage.input_tokens + response.usage.output_tokens
-        except AttributeError:
-            pass
-        
-        # 无法获取token数量
-        return 0
-    
-
     def _calculate_dynamic_ctx(self, history: List[Dict[str, Any]]):
         """计算动态上下文窗口大小"""
         def _count_tokens(text: str) -> int:
@@ -237,7 +261,6 @@ class LLM(ABC):
                 else:
                     total += 2  # 非ASCII字符（中文、日文、韩文等）
             return total
-
 
         total_tokens = 0
         for message in history:

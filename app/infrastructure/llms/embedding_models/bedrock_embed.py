@@ -4,23 +4,24 @@ import asyncio
 import boto3
 import numpy as np
 import logging
-from app.infrastructure.llms.embedding_models.base import BaseEmbedding, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.utils import truncate, num_tokens_from_string
+from .base import BaseEmbedding, MAX_RETRY_ATTEMPTS
+from ..utils import truncate
 
 
 class BedrockEmbed(BaseEmbedding):
     """AWS Bedrock嵌入模型实现"""
 
-    def __init__(self, api_key: str, model_name: str, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, **kwargs):
         """
         初始化Bedrock嵌入模型
         
         Args:
             api_key (str): AWS凭证JSON字符串，包含bedrock_ak, bedrock_sk, bedrock_region
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             **kwargs: 其他参数
         """
-        super().__init__(api_key, model_name)
+        super().__init__(api_key, model_provider, model_name, **kwargs)
     
         # 解析AWS凭证
         try:

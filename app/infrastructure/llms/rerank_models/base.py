@@ -5,8 +5,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Any, Optional
 import numpy as np
+from ..utils import num_tokens_from_string
 from app.config.settings import Settings
-from app.infrastructure.llms.utils import num_tokens_from_string
 
 # 重试配置常量
 MAX_RETRY_ATTEMPTS = 3  # 最大尝试次数
@@ -17,17 +17,19 @@ CONNECTION_TIMEOUT = 30  # 连接超时（秒）
 class BaseRank(ABC):
     """重排序模型基类，用于对检索结果进行重新排序"""
     
-    def __init__(self, api_key: str, model_name: str, base_url: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: Optional[str] = None, **kwargs):
         """
         初始化重排序模型基类
         
         Args:
             api_key (str): API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (Optional[str]): API基础URL
             kwargs (dict): 其他参数
         """
         self.api_key = api_key
+        self.model_provider = model_provider
         self.model_name = model_name
         self.base_url = base_url
         self.configs = kwargs

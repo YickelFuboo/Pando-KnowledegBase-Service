@@ -8,15 +8,15 @@ import torch
 import logging
 from FlagEmbedding import FlagModel
 from huggingface_hub import snapshot_download
-from app.infrastructure.llms.embedding_models.base import BaseEmbedding
-from app.infrastructure.llms.utils import num_tokens_from_string, truncate
+from .base import BaseEmbedding
+from ..utils import truncate
 
 
 class BAAIEmbedding(BaseEmbedding):
     _model = None
     _model_lock = threading.Lock()
 
-    def __init__(self, api_key: str, model_name: str, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, **kwargs):
         """
         初始化默认嵌入模型
         
@@ -31,7 +31,7 @@ class BAAIEmbedding(BaseEmbedding):
         Linux:
         export HF_ENDPOINT=https://hf-mirror.com
         """
-        super().__init__(api_key, model_name, **kwargs)
+        super().__init__(api_key, model_provider, model_name, **kwargs)
  
         with BAAIEmbedding._model_lock:
             logging.info(f"BAAI Embedding model initialized: {model_name}")

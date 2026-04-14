@@ -1,17 +1,12 @@
 import base64
-import json
-import os
 import random
 from abc import ABC, abstractmethod
 from io import BytesIO
 from typing import List, Dict, Any, Optional, Tuple, Union
-from urllib.parse import urljoin
 from PIL import Image
 import logging
 from pathlib import Path
-from app.config.settings import Settings
-from app.utils.common import is_english
-from app.infrastructure.llms.prompts.prompt_template_load import get_prompt_template
+from ..prompts.prompt_template_load import get_prompt_template
 
 
 # 重试配置常量
@@ -22,18 +17,20 @@ CONNECTION_TIMEOUT = 30  # 连接超时（秒）
 class BaseComputerVision(ABC):
     """计算机视觉模型基类，提供图像描述和视觉聊天功能"""
     
-    def __init__(self, api_key: str, model_name: str, base_url: Optional[str] = None, language: str = "Chinese", **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: Optional[str] = None, language: str = "Chinese", **kwargs):
         """
         初始化计算机视觉模型基类
         
         Args:
             api_key (str): API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (Optional[str]): API基础URL
             language (str): 语言设置，默认为中文
             kwargs (dict): 其他参数
         """
         self.api_key = api_key
+        self.model_provider = model_provider
         self.model_name = model_name
         self.base_url = base_url
         self.language = language

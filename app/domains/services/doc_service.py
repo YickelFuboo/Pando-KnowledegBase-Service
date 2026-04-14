@@ -3,7 +3,6 @@ import io
 import re
 import threading
 import uuid
-import asyncio
 import logging
 import pdfplumber
 import aspose.pydrawing as drawing
@@ -19,9 +18,9 @@ from pathlib import Path
 from app.domains.models import Document, KB, ProcessStatus
 from app.rag_core.utils import ParserType
 from app.constants.common import DocumentConstants, FileType, FileSource
-from app.domains.schemes.document import FileUploadResult
 from app.domains.services.common.file_service import FileService, FileUsage
 from app.domains.services.common.doc_vector_store_service import DOC_STORE_CONN
+from app.domains.services.common.web_fetch_service import WebFetchService
 from app.infrastructure.database import get_db
 
 
@@ -29,16 +28,16 @@ class DocumentService:
     """文档服务类"""
 
     @staticmethod
-    async def upload_document_to_kb(
+    async def create_document_from_file(
         session: AsyncSession,
         kb: KB,
         file: UploadFile,
-        created_by: str
-    ) -> FileUploadResult:
+        created_by: str,
+        description: Optional[str] = None,
+    ) -> Document:
         """上传单个文档到知识库"""
-
         try:
-            filename = file.filename    
+            filename = file.filename
             file_obj = file.file
 
             # 读取文件内容
@@ -48,58 +47,44 @@ class DocumentService:
             # 验证文件名有效性
             is_valid, error_msg = FileService.validate_filename(filename)
             if not is_valid:
-                return FileUploadResult(
-                    filename=filename,
-                    success=False,
-                    error=f"文件 '{filename}': {error_msg}"
-                )
-            
-            # 处理重复文件名
-            final_filename = await DocumentService._handle_duplicate_filename(session, kb.id, filename)
+                raise ValueError(f"文件 '{filename}': {error_msg}")
+
+            is_available = await DocumentService._handle_duplicate_filename(session, kb.id, filename)
+            if not is_available:
+                raise ValueError(f"文件 '{filename}': 文件名已存在")
 
             # 判断文件大小
             if file_size > DocumentConstants.MAX_DOCUMENT_FILE_SIZE:
-                return FileUploadResult(
-                    filename=filename,
-                    success=False,
-                    error=f"文件大小 {file_size} 超过最大限制 {DocumentConstants.MAX_DOCUMENT_FILE_SIZE} M"
-                )
-            
-            # 识别文件类型
-            file_type = DocumentService._get_file_type_by_suffix(final_filename)
+                raise ValueError(f"文件大小 {file_size} 超过最大限制 {DocumentConstants.MAX_DOCUMENT_FILE_SIZE} M")
+
+            file_type = DocumentService._get_file_type_by_suffix(filename)
             if file_type == FileType.OTHER:
-                return FileUploadResult(
-                    filename=filename,
-                    success=False,
-                    error=f"文件 '{filename}': 不支持的文件类型"
-                )
-            
-            # 特殊处理PDF文件
+                raise ValueError(f"文件 '{filename}': 不支持的文件类型")
+
             if file_type == FileType.PDF:
                 file_content = FileService.fix_broken_pdf(file_content)
             
             # 存储文件到对象存储
             file_id = await FileService.upload_file(
                 file_data=io.BytesIO(file_content),
-                file_name=final_filename,
+                file_name=filename,
                 file_usage=FileUsage.DOCUMENT
             )
-            
-            # 生成缩略图
-            thumbnail_id = await DocumentService._generate_document_thumbnail(
-                final_filename, file_content
-            )
-            
-            # 确定解析器类型
-            parser_type = DocumentService._get_parser_type(file_type, final_filename, kb.parser_id)
+
+            # 生成文档缩略图
+            thumbnail_id = await DocumentService._generate_document_thumbnail(filename, file_content)
+
+            # 获取解析器类型
+            parser_type = DocumentService._get_parser_type(file_type, filename, kb.parser_id)
             
             # 创建文档记录
             document = Document(
                 id=str(uuid.uuid4()),
                 kb_id=kb.id,
-                name=final_filename,
+                name=filename,
+                description=description,
                 type=file_type.value,
-                suffix=Path(final_filename).suffix.lstrip("."), # 文件扩展名
+                suffix=Path(filename).suffix.lstrip("."),
                 file_id=file_id,
                 size=file_size,
                 parser_id=parser_type.value,
@@ -109,46 +94,27 @@ class DocumentService:
                 thumbnail_id=thumbnail_id,
                 process_status=ProcessStatus.INIT
             )
-            
+
             session.add(document)
             await session.commit()
-            await session.refresh(document)            
+            await session.refresh(document)
             await DocumentService._update_kb_doc_count(session, kb.id)
-            
-            logging.info(f"文档上传成功: {final_filename}")
-            
-            return FileUploadResult(
-                filename=filename,
-                success=True,
-                document_id=document.id,
-            )
-            
+            logging.info(f"文档上传成功: {filename}")
+            return document
         except Exception as e:
-            error_msg = f"处理文件 '{filename}' 失败: {str(e)}"
-            logging.error(error_msg)
-            return FileUploadResult(
-                filename=filename,
-                success=False,
-                error=error_msg
-            )
+            await session.rollback()
+            logging.error(f"处理文件 '{file.filename}' 失败: {e}")
+            raise
     
     @staticmethod
     async def _handle_duplicate_filename(
         session: AsyncSession, 
         kb_id: str, 
         filename: str
-    ) -> str:
-        """处理重复文件名"""
-        base_name = Path(filename).stem
-        extension = Path(filename).suffix
-        counter = 1
-        final_filename = filename
-        
-        while await DocumentService.get_document_by_name(session, kb_id, final_filename):
-            final_filename = f"{base_name}_{counter}{extension}"
-            counter += 1
-        
-        return final_filename
+    ) -> bool:
+        """校验文件名是否可用：重复返回False，不重复返回True"""
+        document = await DocumentService.get_document_by_name(session, kb_id, filename)
+        return document is None
     
     @staticmethod
     def _get_file_type_by_suffix(filename: str) -> FileType:
@@ -371,6 +337,88 @@ class DocumentService:
             return None
 
     @staticmethod
+    async def create_document_from_url(
+        session: AsyncSession,
+        kb: KB,
+        url: str,
+        created_by: str,
+        description: Optional[str] = None,
+    ) -> Document:
+        """根据网页URL创建文档（不在此处触发解析）。"""
+        try:
+            fetch_result = await WebFetchService.fetch(
+                url=url,
+                extract_mode="markdown",
+                max_chars=200000,
+            )
+            if not fetch_result.text:
+                raise ValueError("网页内容为空")
+            
+            target_web_url = (fetch_result.final_url or fetch_result.url or "").strip()
+            if target_web_url:
+                existed_by_url = await DocumentService.get_document_by_web_url(session, kb.id, target_web_url)
+                if existed_by_url:
+                    raise ValueError(f"URL已存在: {target_web_url}")
+
+            safe_title = DocumentService._sanitize_filename(fetch_result.title or "web_page")
+            filename = f"{safe_title}.md"
+            is_available = await DocumentService._handle_duplicate_filename(session, kb.id, filename)
+            if not is_available:
+                raise ValueError(f"文件名已存在: {filename}")
+            
+            content_bytes = fetch_result.text.encode("utf-8")
+            file_id = await FileService.upload_file(
+                file_data=io.BytesIO(content_bytes),
+                file_name=filename,
+                file_usage=FileUsage.DOCUMENT
+            )
+
+            parser_type = DocumentService._get_parser_type(FileType.DOC, filename, kb.parser_id)
+            document = Document(
+                id=str(uuid.uuid4()),
+                kb_id=kb.id,
+                name=filename,
+                description=description,
+                type=FileType.DOC.value,
+                suffix="md",
+                file_id=file_id,
+                size=len(content_bytes),
+                parser_id=parser_type.value,
+                parser_config=kb.parser_config,
+                meta_fields={
+                    "url": fetch_result.url,
+                    "final_url": fetch_result.final_url,
+                    "http_status": fetch_result.status,
+                    "extractor": fetch_result.extractor,
+                    "truncated": fetch_result.truncated,
+                    "content_length": fetch_result.length,
+                },
+                source_type=FileSource.WEB_CRAWL,
+                web_url=target_web_url or None,
+                created_by=created_by,
+                thumbnail_id=None,
+                process_status=ProcessStatus.INIT
+            )
+            session.add(document)
+            await session.commit()
+            await session.refresh(document)
+            await DocumentService._update_kb_doc_count(session, kb.id)
+            return document
+        except Exception as e:
+            await session.rollback()
+            logging.error(f"根据URL创建文档失败: {e}")
+            raise
+
+    @staticmethod
+    def _sanitize_filename(name: str) -> str:
+        """将字符串转为安全文件名。"""
+        cleaned = re.sub(r"[<>:\"/\\|?*]+", "_", (name or "").strip())
+        cleaned = re.sub(r"\s+", "_", cleaned).strip("._")
+        if not cleaned:
+            cleaned = "web_page"
+        return cleaned[:80]
+
+    @staticmethod
     async def get_documents_by_kb_id(
         session: AsyncSession,
         kb_id: str,
@@ -471,24 +519,13 @@ class DocumentService:
             await DocumentService.delete_document_by_id(session, doc_id)
             
             # 4. 创建新文档
-            result = await DocumentService.upload_document_to_kb(
+            new_document = await DocumentService.create_document_from_file(
                 session=session,
                 kb=kb,
                 file=file,
-                created_by=created_by
+                created_by=created_by,
+                description=old_document.description,
             )
-            if not result.success or not result.document_id:
-                raise ValueError(result.error)
-
-            # 5. 获取新文档并更新描述
-            new_document = await DocumentService.get_document_by_id(session, result.document_id)
-            if not new_document:
-                raise ValueError("新文档创建失败")
-
-            # 6. 更新新文档的描述与原文档一致
-            new_document.description = old_document.description
-            await session.commit()
-            await session.refresh(new_document)
             
             logging.info(f"更新文档文件成功: {doc_id}")
             return new_document
@@ -496,6 +533,41 @@ class DocumentService:
         except Exception as e:
             await session.rollback()
             logging.error(f"更新文档文件失败: {e}")
+            raise
+
+    @staticmethod
+    async def update_document_url(
+        session: AsyncSession,
+        doc_id: str,
+        url: str,
+        created_by: str = None,
+        description: Optional[str] = None,
+    ) -> Document:
+        """通过网页URL替换文档内容（删除旧文档并新建）。"""
+        try:
+            old_document = await DocumentService.get_document_by_id(session, doc_id)
+            if not old_document:
+                raise ValueError("文档不存在")
+
+            from app.domains.services.kb_service import KBService
+            kb = await KBService.get_kb_by_id(session, old_document.kb_id)
+            if not kb:
+                raise ValueError("知识库不存在")
+
+            await DocumentService.delete_document_by_id(session, doc_id)
+
+            new_document = await DocumentService.create_document_from_url(
+                session=session,
+                kb=kb,
+                url=url,
+                created_by=created_by,
+                description=description if description is not None else old_document.description,
+            )
+            logging.info(f"更新文档URL成功: {doc_id}, by={created_by}")
+            return new_document
+        except Exception as e:
+            await session.rollback()
+            logging.error(f"更新文档URL失败: {e}")
             raise
     
     @staticmethod
@@ -588,6 +660,27 @@ class DocumentService:
             return result.scalar_one_or_none()
         except Exception as e:
             logging.error(f"获取文档失败: {e}")
+            return None
+
+    @staticmethod
+    async def get_document_by_web_url(
+        session: AsyncSession,
+        kb_id: str,
+        web_url: str,
+    ) -> Optional[Document]:
+        """根据知识库ID和网页URL获取文档。"""
+        try:
+            url = (web_url or "").strip()
+            if not url:
+                return None
+            result = await session.execute(
+                select(Document).where(
+                    and_(Document.kb_id == kb_id, Document.web_url == url)
+                )
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logging.error(f"按URL获取文档失败: {e}")
             return None
 
     @staticmethod

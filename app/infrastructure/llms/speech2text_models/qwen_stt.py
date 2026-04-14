@@ -2,22 +2,22 @@ import os
 from typing import Any, Optional, Tuple
 import asyncio
 import logging
-from app.infrastructure.llms.speech2text_models.base import BaseSTT, MAX_RETRY_ATTEMPTS
+from .base import BaseSTT, MAX_RETRY_ATTEMPTS
 import dashscope
 from http import HTTPStatus
 from dashscope import MultiModalConversation
-from app.infrastructure.llms.utils import num_tokens_from_string
 
 
 class QwenSTT(BaseSTT):
     """通义千问语音识别模型实现（使用dashscope SDK）"""
 
-    def __init__(self, api_key: str, model_name: str = "qwen-audio-asr", base_url: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str = "qwen-audio-asr", base_url: Optional[str] = None, **kwargs):
         """
         初始化通义千问语音识别模型
         
         Args:
             api_key (str): 阿里云API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称，默认为qwen-audio-asr
             base_url (Optional[str]): API基础URL（使用dashscope，此参数忽略）
             
@@ -27,7 +27,7 @@ class QwenSTT(BaseSTT):
             - 支持最长3分钟的音频
             - 使用dashscope原生API，不支持OpenAI兼容模式
         """
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         
         dashscope.api_key = api_key
 

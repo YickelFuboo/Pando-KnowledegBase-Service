@@ -3,22 +3,23 @@ import numpy as np
 import asyncio
 import logging
 import voyageai
-from app.infrastructure.llms.rerank_models.base import BaseRank, MAX_RETRY_ATTEMPTS
+from .base import BaseRank, MAX_RETRY_ATTEMPTS
 
 
 class VoyageRank(BaseRank):
     """Voyage AI重排序模型实现"""
     
-    def __init__(self, api_key: str, model_name: str, base_url: str = None, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: str = None, **kwargs):
         """
         初始化Voyage AI重排序模型
         
         Args:
             api_key (str): Voyage AI API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (str): API基础URL，可选
         """
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         
         self.client = voyageai.Client(api_key=api_key)
 

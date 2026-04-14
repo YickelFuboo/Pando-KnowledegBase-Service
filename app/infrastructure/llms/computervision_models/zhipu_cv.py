@@ -3,24 +3,25 @@ from typing import Optional, Union, List, Dict, Any, Tuple
 from io import BytesIO
 import asyncio
 from zhipuai import ZhipuAI
-from app.infrastructure.llms.computervision_models.base.base import BaseComputerVision, MAX_RETRY_ATTEMPTS
+from .base import BaseComputerVision, MAX_RETRY_ATTEMPTS
 
 
 class ZhipuCV(BaseComputerVision):
     """智谱AI计算机视觉模型实现"""
 
-    def __init__(self, api_key: str, model_name: str = "glm-4v", 
+    def __init__(self, api_key: str, model_provider: str, model_name: str = "glm-4v", 
                  base_url: Optional[str] = None, language: str = "Chinese"):
         """
         初始化智谱AI计算机视觉模型
         
         Args:
             api_key (str): 智谱AI API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称，默认为glm-4v
             base_url (Optional[str]): API基础URL
             language (str): 语言设置
         """
-        super().__init__(api_key, model_name, base_url, language)
+        super().__init__(api_key, model_provider, model_name, base_url, language)
         
         self.client = ZhipuAI(api_key=api_key)
     

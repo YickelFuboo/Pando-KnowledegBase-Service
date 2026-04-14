@@ -6,8 +6,7 @@ import ormsgpack
 from typing import Generator, Optional, Literal
 from pydantic import BaseModel, conint
 from http import HTTPStatus
-from app.infrastructure.llms.text2speech_models.base import BaseTTS, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.utils import num_tokens_from_string
+from .base import BaseTTS, MAX_RETRY_ATTEMPTS
 
 
 class ServeReferenceAudio(BaseModel):
@@ -31,19 +30,20 @@ class ServeTTSRequest(BaseModel):
 class FishAudioTTS(BaseTTS):
     """Fish Audio的文本转语音模型实现"""
 
-    def __init__(self, api_key: str, model_name: str, base_url: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: Optional[str] = None, **kwargs):
         """
         初始化Fish Audio TTS模型
         
         Args:
             api_key (str): JSON格式的API密钥，包含fish_audio_ak和fish_audio_refid
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (Optional[str]): API基础URL，默认为Fish Audio官方URL
         """
         if not base_url:
             base_url = "https://api.fish.audio/v1/tts"
         
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         
         # 解析API密钥
         key_data = json.loads(api_key)

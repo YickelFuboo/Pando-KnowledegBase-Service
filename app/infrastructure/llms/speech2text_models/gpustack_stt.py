@@ -3,25 +3,26 @@ import asyncio
 import logging
 from typing import Any, Optional
 from openai import AsyncOpenAI
-from app.infrastructure.llms.speech2text_models.base import BaseSTT, MAX_RETRY_ATTEMPTS, CONNECTION_TIMEOUT
+from .base import BaseSTT, MAX_RETRY_ATTEMPTS, CONNECTION_TIMEOUT
 
 
 class GPUStackSTT(BaseSTT):
     """GPUStack的语音转文本模型实现"""
 
-    def __init__(self, api_key: str, model_name: str, base_url: str, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: str, **kwargs):
         """
         初始化GPUStack语音转文本模型
         
         Args:
             api_key (str): API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (str): API基础URL
         """
         if base_url.split("/")[-1] != "v1":
             base_url = os.path.join(base_url, "v1")
         
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=CONNECTION_TIMEOUT)
 
     async def stt(self, audio: Any, **kwargs) -> tuple[str, int]:

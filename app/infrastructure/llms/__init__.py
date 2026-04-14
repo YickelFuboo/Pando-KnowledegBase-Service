@@ -2,8 +2,8 @@
 LLM模型模块
 提供各类模型工厂和模型实现
 """
-from .chat_models.base.base import LLM
-from .computervision_models.base.base import BaseComputerVision
+from .chat_models.base import LLM
+from .computervision_models.base import BaseComputerVision
 from .text2speech_models.base import BaseTTS
 from .embedding_models.base import BaseEmbedding
 from .rerank_models.base import BaseRank
