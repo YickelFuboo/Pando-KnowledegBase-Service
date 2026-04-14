@@ -4,27 +4,26 @@ import time
 import logging
 from typing import Any, Optional
 import asyncio
-from app.infrastructure.llms.speech2text_models.base import BaseSTT, MAX_RETRY_ATTEMPTS
+from .base import BaseSTT, MAX_RETRY_ATTEMPTS
 from tencentcloud.asr.v20190614 import asr_client
 from tencentcloud.common import credential
 from tencentcloud.asr.v20190614 import models
-from tencentcloud.common.exception.tencent_cloud_sdk_exception import TencentCloudSDKException
-from app.infrastructure.llms.utils import num_tokens_from_string
 
 
 class TencentSTT(BaseSTT):
     """腾讯云的语音转文本模型实现"""
 
-    def __init__(self, api_key: str, model_name: str = "16k_zh", base_url: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str = "16k_zh", base_url: Optional[str] = None, **kwargs):
         """
         初始化腾讯云语音转文本模型
         
         Args:
             api_key (str): 腾讯云API密钥（JSON格式）
+            model_provider (str): 模型提供商
             model_name (str): 模型名称，默认为16k_zh
             base_url (Optional[str]): API基础URL，默认为腾讯云官方URL
         """
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         
         try:
 

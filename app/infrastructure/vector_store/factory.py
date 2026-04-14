@@ -3,6 +3,7 @@ import logging
 from app.config import settings
 from app.infrastructure.vector_store.base import VectorStoreConnection
 from app.infrastructure.vector_store.es_conn import ESConnection
+from app.infrastructure.vector_store.lancedb_conn import LanceDBConnection
 from app.infrastructure.vector_store.opensearch_conn import OSConnection
 
 
@@ -50,6 +51,8 @@ class VectorStoreFactory:
                     password=settings.os_password,
                     mapping_name=actual_mapping_name
                 )
+            elif db_type == "lancedb":
+                connection = LanceDBConnection(uri=settings.lancedb_uri)
             else:
                 raise ValueError(f"不支持的数据库类型: {db_type}")
             

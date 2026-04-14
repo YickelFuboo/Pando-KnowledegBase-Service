@@ -10,28 +10,27 @@ import asyncio
 import dashscope
 from pathlib import Path
 from dashscope import MultiModalConversation
+from .base import BaseComputerVision, MAX_RETRY_ATTEMPTS
+from ..prompts.prompt_template_load import get_prompt_template
 from app.config.settings import PROJECT_BASE_DIR, settings
-from app.utils.common import is_english
-from app.infrastructure.llms.computervision_models.base.base import BaseComputerVision, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.prompts.prompt_template_load import get_prompt_template
-
 
 
 class QWenCV(BaseComputerVision):
     """通义千问计算机视觉模型实现"""
 
-    def __init__(self, api_key: str, model_name: str = "qwen-vl-chat-v1", 
+    def __init__(self, api_key: str, model_provider: str, model_name: str = "qwen-vl-chat-v1", 
                  base_url: str = None, language: str = "Chinese", **kwargs):
         """ 
         初始化通义千问计算机视觉模型
         
         Args:
             api_key (str): 通义千问API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称，默认为qwen-vl-chat-v1
             base_url (str): API基础URL
             language (str): 语言设置
         """
-        super().__init__(api_key, model_name, base_url, language, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, language, **kwargs)
         
         dashscope.api_key = api_key
 

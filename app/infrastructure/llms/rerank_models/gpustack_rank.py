@@ -4,24 +4,24 @@ import httpx
 import numpy as np
 import aiohttp
 import asyncio
-from app.infrastructure.llms.rerank_models.base import BaseRank, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.utils import num_tokens_from_string
+from .base import BaseRank, MAX_RETRY_ATTEMPTS
 
 
 class GPUStackRank(BaseRank):
     """GPUStack重排序模型实现"""
     
-    def __init__(self, api_key: str, model_name: str, base_url: str, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: str, **kwargs):
         """
         初始化GPUStack重排序模型
         
         Args:
             api_key (str): API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (str): API基础URL
             **kwargs: 其他参数
         """
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
 
         self.base_url = f"{base_url.rstrip('/')}/v1/rerank"
 

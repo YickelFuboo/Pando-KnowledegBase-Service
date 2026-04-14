@@ -3,24 +3,25 @@ from io import BytesIO
 import asyncio
 import logging
 from ollama import Client
-from app.infrastructure.llms.computervision_models.base.base import BaseComputerVision, MAX_RETRY_ATTEMPTS
+from .base import BaseComputerVision, MAX_RETRY_ATTEMPTS
 
 
 class OllamaCV(BaseComputerVision):
     """Ollama 计算机视觉模型实现"""
 
-    def __init__(self, api_key: str = "", model_name: str = "llava", 
+    def __init__(self, api_key: str = "", model_provider: str = "ollama", model_name: str = "llava", 
                  base_url: str = "http://localhost:11434", language: str = "Chinese"):
         """
         初始化Ollama计算机视觉模型
         
         Args:
             api_key (str): API密钥（Ollama通常不需要）
+            model_provider (str): 模型提供商
             model_name (str): 模型名称，默认为llava
             base_url (Optional[str]): Ollama服务地址
             language (str): 语言设置
         """
-        super().__init__(api_key, model_name, base_url, language)
+        super().__init__(api_key, model_provider, model_name, base_url, language)
         
         self.client = Client(host=base_url)
 

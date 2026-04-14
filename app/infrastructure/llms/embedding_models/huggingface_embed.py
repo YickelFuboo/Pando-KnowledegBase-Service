@@ -3,19 +3,19 @@ import numpy as np
 import aiohttp
 import asyncio
 import logging
-from app.infrastructure.llms.embedding_models.base import BaseEmbedding, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.utils import num_tokens_from_string
+from .base import BaseEmbedding, MAX_RETRY_ATTEMPTS
 
 
 class HuggingFaceEmbed(BaseEmbedding):
     """HuggingFace嵌入模型实现"""
 
-    def __init__(self, api_key: str, model_name: str, base_url: str = None, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: str = None, **kwargs):
         """
         初始化HuggingFace嵌入模型
         
         Args:
             api_key (str): HuggingFace API密钥（可选）
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (str): API基础URL，默认为http://127.0.0.1:8080
             **kwargs: 其他参数
@@ -25,7 +25,7 @@ class HuggingFaceEmbed(BaseEmbedding):
 
         # 处理模型名称，移除可能的"___"分隔符
         model_name = model_name.split("___")[0]        
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
 
 
     async def encode(self, texts: List[str]) -> Tuple[np.ndarray, int]:

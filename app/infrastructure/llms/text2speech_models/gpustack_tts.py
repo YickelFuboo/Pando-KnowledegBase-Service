@@ -2,23 +2,23 @@ import aiohttp
 import asyncio
 import logging
 from typing import Generator, Tuple
-from app.infrastructure.llms.text2speech_models.base import BaseTTS, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.utils import num_tokens_from_string
+from .base import BaseTTS, MAX_RETRY_ATTEMPTS
 
 
 class GPUStackTTS(BaseTTS):
     """GPUStack的文本转语音模型实现"""
 
-    def __init__(self, api_key: str, model_name: str, base_url: str, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: str, **kwargs):
         """
         初始化GPUStack TTS模型
         
         Args:
             api_key (str): API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (str): API基础URL
         """
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"

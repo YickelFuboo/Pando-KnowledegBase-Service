@@ -1,5 +1,5 @@
 from typing import Dict, Type
-from app.infrastructure.llms.base_factory import BaseModelFactory
+from ..base_factory import BaseModelFactory
 from .base import BaseSTT
 from .openai_stt import OpenAISTT
 from .qwen_stt import QwenSTT

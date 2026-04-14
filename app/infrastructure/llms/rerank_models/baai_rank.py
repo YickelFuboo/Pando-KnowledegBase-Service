@@ -9,20 +9,22 @@ import asyncio
 import torch
 from FlagEmbedding import FlagReranker
 from huggingface_hub import snapshot_download
-from app.infrastructure.llms.rerank_models.base import BaseRank
-from app.infrastructure.llms.utils import num_tokens_from_string, truncate
+from .base import BaseRank
+from ..utils import truncate
+
 
 class BAAIRank(BaseRank):
     """BAAI重排序模型实现，使用FlagReranker"""
     _model = None
     _model_lock = threading.Lock()
 
-    def __init__(self, api_key: str, model_name: str, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, **kwargs):
         """
         初始化BAAI重排序模型
         
         Args:
             api_key (str): API密钥（未使用）
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             **kwargs: 其他参数
             
@@ -32,7 +34,7 @@ class BAAIRank(BaseRank):
         Linux:
         export HF_ENDPOINT=https://hf-mirror.com
         """
-        super().__init__(api_key, model_name, **kwargs)
+        super().__init__(api_key, model_provider, model_name, **kwargs)
         
         # 加载BAAI FlagReranker模型
         if not BAAIRank._model:

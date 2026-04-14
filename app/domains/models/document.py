@@ -33,6 +33,7 @@ class Document(Base):
     meta_fields = Column(JSON, default={}, comment="文档元数据字段(JSON)")
     thumbnail_id = Column(String(500), comment="缩略图ID")
     source_type = Column(String(20), default=FileSource.UPLOAD, comment="文件来源")
+    web_url = Column(String(1024), nullable=True, index=True, comment="网页来源URL")
     process_status = Column(
         SQLEnum(ProcessStatus, values_callable=lambda obj: [e.value for e in obj]),
         default=ProcessStatus.INIT,

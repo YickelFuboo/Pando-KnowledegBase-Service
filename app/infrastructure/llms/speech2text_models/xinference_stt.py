@@ -3,23 +3,23 @@ import aiohttp
 import asyncio
 import logging
 from typing import Any, Optional
-from app.infrastructure.llms.speech2text_models.base import BaseSTT, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.utils import num_tokens_from_string
+from .base import BaseSTT, MAX_RETRY_ATTEMPTS
 
 
 class XinferenceSTT(BaseSTT):
     """Xinference的语音转文本模型实现"""
 
-    def __init__(self, api_key: str, model_name: str = "whisper-small", base_url: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str = "whisper-small", base_url: Optional[str] = None, **kwargs):
         """
         初始化Xinference语音转文本模型
         
         Args:
             api_key (str): API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称，默认为whisper-small
             base_url (Optional[str]): API基础URL
         """
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
 
     async def stt(self, audio: Any, language: str = "zh", prompt: Optional[str] = None, 
                      response_format: str = "json", temperature: float = 0.7, **kwargs) -> tuple[str, int]:

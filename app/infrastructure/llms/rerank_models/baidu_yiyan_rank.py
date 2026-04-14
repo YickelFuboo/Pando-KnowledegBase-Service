@@ -4,17 +4,19 @@ import numpy as np
 import asyncio
 import logging
 from qianfan.resources import Reranker
-from app.infrastructure.llms.rerank_models.base import BaseRank, MAX_RETRY_ATTEMPTS
+from .base import BaseRank, MAX_RETRY_ATTEMPTS
+
 
 class BaiduYiyanRank(BaseRank):
     """百度千帆重排序模型实现"""
     
-    def __init__(self, api_key: str, model_name: str, base_url: str = None, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: str = None, **kwargs):
         """
         初始化百度千帆重排序模型
         
         Args:
             api_key (str): 百度千帆API密钥（JSON格式，包含ak和sk）
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (str): API基础URL，可选
         """

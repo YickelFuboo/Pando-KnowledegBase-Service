@@ -4,14 +4,32 @@ from pydantic import BaseModel, Field
 from app.domains.models import ProcessStatus
 
 
-class FileUploadResult(BaseModel):
+class CreateDocumentFromFileResult(BaseModel):
     """单个文件上传结果"""
     filename: str                    # 原始文件名
     success: bool                    # 是否成功
     document_id: Optional[str] = None    # 成功时返回文档ID
     error: Optional[str] = None          # 失败时返回错误信息
 
+class CreateDocumentFromUrlResult(BaseModel):
+    """单个URL创建结果"""
+    url: str
+    success: bool
+    document_id: Optional[str] = None
+    error: Optional[str] = None
+
 # 请求模型
+class CreateDocumentFromUrlRequest(BaseModel):
+    """通过网页URL创建文档请求模型"""
+    kb_id: str = Field(..., description="知识库ID")
+    url: str = Field(..., description="网页URL")
+    description: Optional[str] = Field(None, description="文档描述")
+
+class UpdateDocumentFromUrlRequest(BaseModel):
+    """通过网页URL更新文档请求模型"""
+    url: str = Field(..., description="网页URL")
+    description: Optional[str] = Field(None, description="文档描述")
+
 class UpdateDocumentRequest(BaseModel):
     """更新文档请求模型"""
     description: Optional[str] = Field(None, description="文档描述")
@@ -36,6 +54,7 @@ class DocumentResponse(BaseModel):
     parser_config: Optional[Any]
     meta_fields: Optional[Any] = None
     source_type: str
+    web_url: Optional[str] = None
     process_status: ProcessStatus
     chunk_count: int = 0
     created_by: str

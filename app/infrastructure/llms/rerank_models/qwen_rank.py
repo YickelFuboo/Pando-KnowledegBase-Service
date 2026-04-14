@@ -4,23 +4,24 @@ import numpy as np
 import asyncio
 import logging
 import dashscope
-from app.infrastructure.llms.rerank_models.base import BaseRank, MAX_RETRY_ATTEMPTS
+from .base import BaseRank, MAX_RETRY_ATTEMPTS
 
 
 class QwenRank(BaseRank):
     """通义千问重排序模型实现"""
     
-    def __init__(self, api_key: str, model_name: str = "gte-rerank", base_url: str = None, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str = "gte-rerank", base_url: str = None, **kwargs):
         """
         初始化通义千问重排序模型
         
         Args:
             api_key (str): 通义千问API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称，默认为gte-rerank
             base_url (str): API基础URL，可选
             **kwargs: 其他参数
         """
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         
         self.model_name = dashscope.TextReRank.Models.gte_rerank if model_name is None else model_name
 

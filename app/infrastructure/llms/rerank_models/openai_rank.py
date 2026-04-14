@@ -4,26 +4,27 @@ import numpy as np
 import aiohttp
 import asyncio
 import logging
-from app.infrastructure.llms.rerank_models.base import BaseRank, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.utils import truncate, num_tokens_from_string
+from .base import BaseRank, MAX_RETRY_ATTEMPTS
+from ..utils import truncate
 
 
 class OpenAIRank(BaseRank):
     """OpenAI兼容的重排序模型实现"""
     
-    def __init__(self, api_key: str, model_name: str, base_url: str, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str, base_url: str, **kwargs):
         """
         初始化OpenAI兼容的重排序模型
         
         Args:
             api_key (str): API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (str): API基础URL
         """
         if base_url.find("/rerank") == -1:
             base_url = urljoin(base_url, "/rerank")
         
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
             
         self.headers = {
             "Content-Type": "application/json", 
@@ -42,7 +43,7 @@ class OpenAIRank(BaseRank):
         Returns:
             Tuple[np.ndarray, int]: (相似度分数数组, token数量)
         """
-        # 截断文本到500字符
+        # 截断到 500 tokens（utils.truncate 按 tiktoken 计）
         texts = [truncate(t, 500) for t in texts]
         
         data = {    

@@ -2,26 +2,26 @@ import aiohttp
 import asyncio
 import logging
 from typing import Generator, Optional, Tuple
-from app.infrastructure.llms.text2speech_models.base import BaseTTS, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.utils import num_tokens_from_string
+from .base import BaseTTS, MAX_RETRY_ATTEMPTS
 
 
 class SiliconFlowTTS(BaseTTS):
     """SiliconFlow的文本转语音模型实现"""
 
-    def __init__(self, api_key: str, model_name: str = "FunAudioLLM/CosyVoice2-0.5B", base_url: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str = "FunAudioLLM/CosyVoice2-0.5B", base_url: Optional[str] = None, **kwargs):
         """
         初始化SiliconFlow TTS模型
         
         Args:
             api_key (str): SiliconFlow API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (Optional[str]): API基础URL，默认为SiliconFlow官方URL
         """
         if not base_url:
             base_url = "https://api.siliconflow.cn/v1"
         
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"

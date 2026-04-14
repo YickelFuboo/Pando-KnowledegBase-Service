@@ -1,20 +1,21 @@
 import asyncio
 import logging
 from typing import Generator, Optional
-from app.infrastructure.llms.text2speech_models.base import BaseTTS, MAX_RETRY_ATTEMPTS
 import dashscope
+from .base import BaseTTS, MAX_RETRY_ATTEMPTS
 from app.infrastructure.llms.utils import num_tokens_from_string
 
 
 class QwenTTS(BaseTTS):
     """通义千问文本转语音模型实现（使用dashscope SDK）"""
 
-    def __init__(self, api_key: str, model_name: str = "qwen-tts", base_url: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str = "qwen-tts", base_url: Optional[str] = None, **kwargs):
         """
         初始化通义千问TTS模型
         
         Args:
             api_key (str): 阿里云API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称，默认为qwen-tts
             base_url (Optional[str]): API基础URL（使用dashscope，此参数忽略）
             
@@ -23,7 +24,7 @@ class QwenTTS(BaseTTS):
             - 仅支持qwen-tts系列模型
             - 支持多种音色选择：Cherry, Serena, Ethan, Chelsie
         """
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         
         try:
             dashscope.api_key = api_key

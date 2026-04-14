@@ -6,7 +6,6 @@ from .base import BaseRank
 from .cohere_rank import CohereRank
 from .gpustack_rank import GPUStackRank
 from .huggingface_rank import HuggingfaceRank
-from .jina_rank import JinaRank
 from .nvidia_rank import NvidiaRank
 from .openai_rank import OpenAIRank
 from .qwen_rank import QwenRank
@@ -17,12 +16,12 @@ from .xinference_rank import XinferenceRank
 
 class ReRankFactory(BaseModelFactory[BaseRank]):
     """重排序模型工厂类"""
-    
+
     @property
     def _models(self) -> Dict[str, Type[BaseRank]]:
         return {
             "baai": BAAIRank,
-            "jina": JinaRank,
+            "jina": OpenAIRank,
             "xinference": XinferenceRank,
             "cohere": CohereRank,
             "openai_compatible": OpenAIRank,

@@ -2,25 +2,26 @@ import aiohttp
 import asyncio
 import logging
 from typing import Generator, Optional
-from app.infrastructure.llms.text2speech_models.base import BaseTTS, MAX_RETRY_ATTEMPTS
-from app.infrastructure.llms.utils import num_tokens_from_string
+from .base import BaseTTS, MAX_RETRY_ATTEMPTS
+
 
 class OllamaTTS(BaseTTS):
     """Ollama的文本转语音模型实现"""
 
-    def __init__(self, api_key: str, model_name: str = "ollama-tts", base_url: Optional[str] = None, **kwargs):
+    def __init__(self, api_key: str, model_provider: str, model_name: str = "ollama-tts", base_url: Optional[str] = None, **kwargs):
         """
         初始化Ollama TTS模型
         
         Args:
             api_key (str): API密钥
+            model_provider (str): 模型提供商
             model_name (str): 模型名称
             base_url (Optional[str]): API基础URL，默认为Ollama官方URL
         """
         if not base_url:
             base_url = "https://api.ollama.ai/v1"
         
-        super().__init__(api_key, model_name, base_url, **kwargs)
+        super().__init__(api_key, model_provider, model_name, base_url, **kwargs)
         
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",

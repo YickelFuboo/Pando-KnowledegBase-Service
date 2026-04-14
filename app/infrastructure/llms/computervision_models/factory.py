@@ -1,13 +1,11 @@
 from typing import Dict, Type
-from app.infrastructure.llms.base_factory import BaseModelFactory
-from .base.base import BaseComputerVision
+from ..base_factory import BaseModelFactory
+from .base import BaseComputerVision
 from .openai_cv import OpenAICV
-from .azure_cv import AzureOpenAICV
 from .qwen_cv import QWenCV
 from .zhipu_cv import ZhipuCV
 from .ollama_cv import OllamaCV
 from .gemini_cv import GeminiCV
-from .siliconflow_cv import SiliconFlowCV
 
 
 class ComputerVisionModelFactory(BaseModelFactory[BaseComputerVision]):
@@ -17,12 +15,12 @@ class ComputerVisionModelFactory(BaseModelFactory[BaseComputerVision]):
     def _models(self) -> Dict[str, Type[BaseComputerVision]]:
         return {
             "openai": OpenAICV,
-            "azure_openai": AzureOpenAICV,
+            "azure_openai": OpenAICV,
             "qwen": QWenCV,
             "zhipu": ZhipuCV,
             "ollama": OllamaCV,
             "gemini": GeminiCV,
-            "siliconflow": SiliconFlowCV,
+            "siliconflow": OpenAICV,
         }
 
     def __init__(self):
