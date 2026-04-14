@@ -106,7 +106,7 @@ class Settings(BaseSettings):
     # =============================================================================
     # 向量存储配置 - Vector Store
     # =============================================================================
-    # 向量存储引擎类型 (elasticsearch, opensearch)
+    # 向量存储引擎类型 (elasticsearch, opensearch, lancedb)
     vector_store_engine: str = Field(default="elasticsearch", description="向量存储引擎类型", env="VECTOR_STORE_ENGINE")
     # 向量存储映射文件名称
     vector_store_mapping: str = Field(default="es_doc_mapping.json", description="向量存储映射文件名称", env="VECTOR_STORE_MAPPING")
@@ -121,6 +121,8 @@ class Settings(BaseSettings):
     os_hosts: str = Field(default="http://localhost:9200", description="OpenSearch主机地址", env="OS_HOSTS")
     os_username: str = Field(default="admin", description="OpenSearch用户名", env="OS_USERNAME")
     os_password: str = Field(default="admin", description="OpenSearch密码", env="OS_PASSWORD")
+    # LanceDB配置
+    lancedb_uri: str = Field(default="./data/lancedb", description="LanceDB本地存储路径", env="LANCEDB_URI")
     
     # 文档处理配置
     doc_maximum_size: int = Field(default=134217728, description="最大内容长度(字节)", env="DOC_MAXIMUM_SIZE")

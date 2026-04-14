@@ -42,7 +42,7 @@ DB_NAME=pando_knowledgebase_service
 # 数据库类型: postgresql/mysql/sqlite
 DATABASE_TYPE=sqlite
 # SQLite 配置 (如果使用SQLite)
-SQLITE_PATH=./data/pando_knowledgebase_service.db
+SQLITE_PATH=./data/sqlite/pando_knowledgebase_service.db
 # 数据库连接池配置
 DB_POOL_SIZE=10
 DB_MAX_OVERFLOW=20
@@ -117,8 +117,8 @@ OSS_PREFIX_PATH=
 # =============================================================================
 # 向量存储配置 - Vector Store
 # =============================================================================
-# 向量存储引擎类型 (elasticsearch, opensearch, infinity)
-VECTOR_STORE_ENGINE=elasticsearch
+# 向量存储引擎类型 (elasticsearch, opensearch, lancedb)
+VECTOR_STORE_ENGINE=lancedb
 # 向量存储映射文件名称
 VECTOR_STORE_MAPPING=es_doc_mapping.json
 
@@ -133,6 +133,9 @@ ES_VERIFY_CERTS=false
 OS_HOSTS=http://localhost:9200
 OS_USERNAME=admin
 OS_PASSWORD=admin
+
+# LanceDB配置
+LANCEDB_URI=./data/lancedb
 
 # 文档处理配置
 DOC_MAXIMUM_SIZE=134217728
